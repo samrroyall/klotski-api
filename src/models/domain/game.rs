@@ -95,6 +95,25 @@ impl Board {
         }
     }
 
+    fn is_placement_valid(&self, block_id: u8, position: &Position) -> bool {
+        let dimensions = Block::from_id(block_id).unwrap().dimensions;
+
+        for i in 0..(dimensions.rows as usize) {
+            for j in 0..(dimensions.cols as usize) {
+                if position.row + i >= Self::ROWS
+                    || position.col + j >= Self::COLS
+                    || self.filled[position.row + i][position.row + j]
+                {
+                    return false;
+                }
+            }
+        }
+
+        true
+    }
+}
+
+impl Board {
     pub fn new() -> Self {
         Self {
             blocks: vec![],
@@ -179,9 +198,15 @@ impl Board {
         } = self.blocks[block_idx].clone();
 
         let old_dimensions = Block::from_id(old_block_id).unwrap().dimensions;
-        let new_dimensions = Block::from_id(new_block_id).unwrap().dimensions;
 
         self.update_filled(&position, &old_dimensions, false);
+
+        if !self.is_placement_valid(new_block_id, &position) {
+            // TODO: throw some custom exception
+            return;
+        }
+
+        let new_dimensions = Block::from_id(new_block_id).unwrap().dimensions;
 
         self.update_filled(&position, &new_dimensions, true);
 
@@ -205,6 +230,11 @@ impl Board {
             row: (old_position.row as i8 + row_diff) as usize,
             col: (old_position.col as i8 + col_diff) as usize,
         };
+
+        if !self.is_placement_valid(block_id, &new_position) {
+            // TODO: throw some custom exception
+            return;
+        }
 
         self.update_filled(&new_position, &dimensions, true);
 
