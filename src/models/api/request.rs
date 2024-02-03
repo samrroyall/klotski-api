@@ -3,7 +3,7 @@ use serde::Deserialize;
 use crate::models::domain::game::PositionedBlock;
 
 #[derive(Deserialize)]
-pub struct QueryParams {
+pub struct BoardQueryParams {
     pub id: String,
 }
 
