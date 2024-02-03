@@ -1,5 +1,5 @@
 use diesel::prelude::*;
-use diesel::r2d2::{self, ConnectionManager};
+use diesel::r2d2::{ConnectionManager, Pool};
 
 fn get_database_url() -> String {
     dotenvy::dotenv().ok();
@@ -16,12 +16,12 @@ fn get_database_url() -> String {
     )
 }
 
-pub type DbPool = r2d2::Pool<ConnectionManager<PgConnection>>;
+pub type DbPool = Pool<ConnectionManager<PgConnection>>;
 
 pub fn get_db_pool() -> DbPool {
     let database_url = get_database_url();
 
     let manager = ConnectionManager::<PgConnection>::new(database_url);
 
-    r2d2::Pool::new(manager).expect("Failed to create DB pool.")
+    Pool::new(manager).expect("Failed to create DB pool.")
 }

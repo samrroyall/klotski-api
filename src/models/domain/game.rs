@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::errors::domain::BoardError;
+
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 struct Dimensions {
     rows: u8,
@@ -174,24 +176,41 @@ impl Board {
         self.find_block(&winning_block).is_some()
     }
 
-    pub fn add_block(&mut self, positioned_block: PositionedBlock) {
+    pub fn add_block(&mut self, positioned_block: PositionedBlock) -> Result<(), BoardError> {
         let block = Block::from_id(positioned_block.block_id).unwrap();
+
+        if !self.is_placement_valid(positioned_block.block_id, &positioned_block.position) {
+            return Err(BoardError::BlockPlacementInvalid);
+        }
 
         self.update_filled(&positioned_block.position, &block.dimensions, true);
 
         self.blocks.push(positioned_block);
+
+        Ok(())
     }
 
-    pub fn remove_block(&mut self, block_idx: usize) {
+    pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
+        if block_idx >= self.blocks.len() {
+            return Err(BoardError::BlockIndexOutOfBounds);
+        }
+
         let PositionedBlock { block_id, position } = self.blocks[block_idx].clone();
+
         let dimensions = Block::from_id(block_id).unwrap().dimensions;
 
         self.update_filled(&position, &dimensions, false);
 
         self.blocks.swap_remove(block_idx);
+
+        Ok(())
     }
 
-    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) {
+    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) -> Result<(), BoardError> {
+        if block_idx >= self.blocks.len() {
+            return Err(BoardError::BlockIndexOutOfBounds);
+        }
+
         let PositionedBlock {
             block_id: old_block_id,
             position,
@@ -202,8 +221,9 @@ impl Board {
         self.update_filled(&position, &old_dimensions, false);
 
         if !self.is_placement_valid(new_block_id, &position) {
-            // TODO: throw some custom exception
-            return;
+            self.update_filled(&position, &old_dimensions, true);
+
+            return Err(BoardError::BlockPlacementInvalid);
         }
 
         let new_dimensions = Block::from_id(new_block_id).unwrap().dimensions;
@@ -214,9 +234,20 @@ impl Board {
             block_id: new_block_id,
             position,
         };
+
+        Ok(())
     }
 
-    pub fn move_block(&mut self, block_idx: usize, row_diff: i8, col_diff: i8) {
+    pub fn move_block(
+        &mut self,
+        block_idx: usize,
+        row_diff: i8,
+        col_diff: i8,
+    ) -> Result<(), BoardError> {
+        if block_idx >= self.blocks.len() {
+            return Err(BoardError::BlockIndexOutOfBounds);
+        }
+
         let PositionedBlock {
             block_id,
             position: old_position,
@@ -226,14 +257,19 @@ impl Board {
 
         self.update_filled(&old_position, &dimensions, false);
 
+        if old_position.row == 0 && row_diff < 0 || old_position.col == 0 && col_diff < 0 {
+            return Err(BoardError::BlockPlacementInvalid);
+        }
+
         let new_position = Position {
             row: (old_position.row as i8 + row_diff) as usize,
             col: (old_position.col as i8 + col_diff) as usize,
         };
 
         if !self.is_placement_valid(block_id, &new_position) {
-            // TODO: throw some custom exception
-            return;
+            self.update_filled(&old_position, &dimensions, true);
+
+            return Err(BoardError::BlockPlacementInvalid);
         }
 
         self.update_filled(&new_position, &dimensions, true);
@@ -242,5 +278,7 @@ impl Board {
             block_id,
             position: new_position,
         };
+
+        Ok(())
     }
 }

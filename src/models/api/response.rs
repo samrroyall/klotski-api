@@ -1,9 +1,6 @@
 use serde::Serialize;
 
-use crate::models::{
-    db::tables::BoardState,
-    domain::game::{Move, PositionedBlock},
-};
+use crate::models::db::tables::BoardState;
 
 #[derive(Serialize)]
 pub struct BuildingResponse {
@@ -25,7 +22,7 @@ impl BuildingResponse {
 #[derive(Serialize)]
 pub struct SolvingResponse {
     id: String,
-    blocks: Vec<PositionedBlock>,
-    available_moves: Vec<Move>,
+    blocks: String,
+    available_moves: String,
     is_solved: bool,
 }

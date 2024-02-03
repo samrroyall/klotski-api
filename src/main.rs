@@ -3,6 +3,7 @@ use axum::{
     Extension, Router,
 };
 
+mod errors;
 mod handlers;
 mod models;
 mod repositories;
