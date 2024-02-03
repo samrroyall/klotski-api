@@ -216,6 +216,10 @@ impl Board {
             position,
         } = self.blocks[block_idx].clone();
 
+        if old_block_id == new_block_id {
+            return Ok(());
+        }
+
         let old_dimensions = Block::from_id(old_block_id).unwrap().dimensions;
 
         self.update_filled(&position, &old_dimensions, false);
@@ -246,6 +250,10 @@ impl Board {
     ) -> Result<(), BoardError> {
         if block_idx >= self.blocks.len() {
             return Err(BoardError::BlockIndexOutOfBounds);
+        }
+
+        if row_diff == 0 && col_diff == 0 {
+            return Ok(());
         }
 
         let PositionedBlock {
