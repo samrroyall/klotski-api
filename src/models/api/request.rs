@@ -8,17 +8,24 @@ pub struct BoardQueryParams {
 #[derive(Debug, Deserialize)]
 pub struct AddBlockRequest {
     pub block_id: u8,
-    pub row: u8,
-    pub col: u8,
+    pub min_row: u8,
+    pub min_col: u8,
 }
 
 #[derive(Debug, Deserialize)]
-pub enum AlterBlockAction {
-    ChangeBlock(u8),
-    MoveBlock(i8, i8),
+pub struct ChangeBlockRequest {
+    pub new_block_id: u8,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AlterBlockRequest {
-    pub action: AlterBlockAction,
+pub struct MoveBlockRequest {
+    pub row_diff: i8,
+    pub col_diff: i8,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AlterBlockRequest {
+    ChangeBlock(ChangeBlockRequest),
+    MoveBlock(MoveBlockRequest),
 }

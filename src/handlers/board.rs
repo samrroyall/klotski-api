@@ -72,8 +72,13 @@ pub async fn add_block(
     Query(params): Query<BoardQueryParams>,
     Json(payload): Json<AddBlockRequest>,
 ) -> AxumResponse {
-    if let Some(positioned_block) = PositionedBlock::new(payload.block_id, payload.row, payload.col)
-    {
+    let AddBlockRequest {
+        block_id,
+        min_row,
+        min_col,
+    } = payload;
+
+    if let Some(positioned_block) = PositionedBlock::new(block_id, min_row, min_col) {
         let update_fn = |board: &mut Board| board.add_block(positioned_block);
 
         return update_board_state(&params.id, update_fn, pool)
@@ -96,11 +101,15 @@ pub async fn alter_block(
     Query(params): Query<BoardQueryParams>,
     Json(payload): Json<AlterBlockRequest>,
 ) -> AxumResponse {
-    let update_fn = |board: &mut Board| match payload.action {
-        AlterBlockAction::ChangeBlock(block_id) => board.change_block(block_idx, block_id),
-        AlterBlockAction::MoveBlock(row_diff, col_diff) => {
-            board.move_block(block_idx, row_diff, col_diff)
+    let update_fn = |board: &mut Board| match payload {
+        AlterBlockRequest::ChangeBlock(change_block_data) => {
+            board.change_block(block_idx, change_block_data.new_block_id)
         }
+        AlterBlockRequest::MoveBlock(move_block_data) => board.move_block(
+            block_idx,
+            move_block_data.row_diff,
+            move_block_data.col_diff,
+        ),
     };
 
     update_board_state(&params.id, update_fn, pool)

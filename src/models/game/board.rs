@@ -45,9 +45,9 @@ impl Board {
     pub const ROWS: usize = 5;
     pub const COLS: usize = 4;
     const WINNING_BLOCK_ID: u8 = 4;
-    const NUM_EMPTY_CELLS: u8 = 2;
     const WINNING_ROW: usize = 3;
     const WINNING_COL: usize = 1;
+    const NUM_EMPTY_CELLS: u8 = 2;
 
     fn find_block(&self, target: &PositionedBlock) -> Option<usize> {
         self.blocks.iter().position(|curr| curr == target)
@@ -132,8 +132,8 @@ impl Board {
     pub fn is_solved(&self) -> bool {
         let winning_block = PositionedBlock::new(
             Self::WINNING_BLOCK_ID,
-            Self::WINNING_COL as u8,
             Self::WINNING_ROW as u8,
+            Self::WINNING_COL as u8,
         )
         .unwrap();
 

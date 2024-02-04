@@ -64,10 +64,10 @@ impl PositionedBlock {
         if let Some(min_position) = Position::new(min_row as i8, min_col as i8) {
             let dimensions = Block::from_id(block_id).unwrap().dimensions();
 
-            let new_row = (min_position.row() as u8 + dimensions.rows()) as i8 - 1;
-            let new_col = (min_position.col() as u8 + dimensions.cols()) as i8 - 1;
+            let max_row = (min_position.row() as u8 + dimensions.rows()) as i8 - 1;
+            let max_col = (min_position.col() as u8 + dimensions.cols()) as i8 - 1;
 
-            if let Some(max_position) = Position::new(new_row, new_col) {
+            if let Some(max_position) = Position::new(max_row, max_col) {
                 return Some(Self {
                     block_id,
                     min_position,
