@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde_json::to_string;
 
-use crate::models::domain::game::Board;
+use crate::models::game::board::Board;
 
 #[derive(AsChangeset, Insertable, Selectable, Queryable, Debug, Clone)]
 #[diesel(table_name = super::schema::board_states)]
