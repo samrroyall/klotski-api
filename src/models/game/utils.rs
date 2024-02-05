@@ -48,4 +48,8 @@ impl Position {
     pub fn col(&self) -> usize {
         self.col
     }
+
+    pub fn to_array(&self) -> [usize; 2] {
+        [self.row, self.col]
+    }
 }

@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::errors::game::BoardError;
-
 use super::block::PositionedBlock;
+use crate::errors::game::BoardError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Move {
@@ -11,6 +10,30 @@ pub struct Move {
 }
 
 impl Move {
+    pub const UP_ONE: Self = Self {
+        row_diff: -1,
+        col_diff: 0,
+    };
+    pub const DOWN_ONE: Self = Self {
+        row_diff: 1,
+        col_diff: 0,
+    };
+    pub const LEFT_ONE: Self = Self {
+        row_diff: 0,
+        col_diff: -1,
+    };
+    pub const RIGHT_ONE: Self = Self {
+        row_diff: 0,
+        col_diff: 1,
+    };
+
+    pub const ALL_SINGLE_MOVES: [Self; 4] = [
+        Self::UP_ONE,
+        Self::DOWN_ONE,
+        Self::LEFT_ONE,
+        Self::RIGHT_ONE,
+    ];
+
     pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
         if row_diff.abs() >= Board::ROWS as i8 || col_diff.abs() >= Board::COLS as i8 {
             return None;
@@ -25,6 +48,14 @@ impl Move {
 
     pub fn col_diff(&self) -> i8 {
         self.col_diff
+    }
+
+    pub fn is_opposite(&self, other: &Self) -> bool {
+        self.row_diff == -other.row_diff && self.col_diff == -other.col_diff
+    }
+
+    pub fn to_array(&self) -> [i8; 2] {
+        [self.row_diff, self.col_diff]
     }
 }
 
@@ -54,22 +85,22 @@ impl Board {
     }
 
     fn update_filled(&mut self, positioned_block: &PositionedBlock, value: bool) {
-        let min_position = positioned_block.min_position();
-        let max_position = positioned_block.max_position();
+        let [min_row, min_col] = positioned_block.min_position().to_array();
+        let [max_row, max_col] = positioned_block.max_position().to_array();
 
-        for i in min_position.row()..=max_position.row() {
-            for j in min_position.col()..=max_position.col() {
+        for i in min_row..=max_row {
+            for j in min_col..=max_col {
                 self.filled[i][j] = value;
             }
         }
     }
 
     fn is_placement_valid(&self, positioned_block: &PositionedBlock) -> bool {
-        let min_position = positioned_block.min_position();
-        let max_position = positioned_block.max_position();
+        let [min_row, min_col] = positioned_block.min_position().to_array();
+        let [max_row, max_col] = positioned_block.max_position().to_array();
 
-        for i in min_position.row()..=max_position.row() {
-            for j in min_position.col()..=max_position.col() {
+        for i in min_row..=max_row {
+            for j in min_col..=max_col {
                 if self.filled[i][j] {
                     return false;
                 }
@@ -77,6 +108,72 @@ impl Board {
         }
 
         true
+    }
+
+    fn is_move_valid_for_block(&self, block: &mut PositionedBlock, move_: &Move) -> bool {
+        if block.make_move(move_).is_ok() {
+            let new_min_pos = block.min_position();
+            let new_max_pos = block.max_position();
+
+            let result = match move_.to_array() {
+                [0, col_diff] => {
+                    let new_col = if col_diff < 0 {
+                        new_min_pos.col()
+                    } else {
+                        new_max_pos.row()
+                    };
+
+                    (new_min_pos.row()..=new_max_pos.row())
+                        .map(|row| self.filled[row][new_col])
+                        .all(|filled| !filled)
+                }
+                [row_diff, 0] => {
+                    let new_row = if row_diff < 0 {
+                        new_min_pos.row()
+                    } else {
+                        new_max_pos.row()
+                    };
+
+                    (new_min_pos.col()..=new_max_pos.col())
+                        .map(|col| self.filled[new_row][col])
+                        .all(|filled| !filled)
+                }
+                _ => false,
+            };
+
+            let _ = block.undo_move(move_);
+
+            return result;
+        }
+
+        false
+    }
+
+    fn get_next_moves_for_block(&self, block: &PositionedBlock) -> Vec<Move> {
+        let mut temp_block = block.clone();
+
+        let mut next_moves = Move::ALL_SINGLE_MOVES
+            .into_iter()
+            .filter(|move_| self.is_move_valid_for_block(&mut temp_block, move_))
+            .collect::<Vec<Move>>();
+
+        let num_single_moves = next_moves.len();
+
+        for i in 0..num_single_moves {
+            let move_one = next_moves[i].clone();
+
+            if temp_block.make_move(&move_one).is_ok() {
+                let move_moves = Move::ALL_SINGLE_MOVES.into_iter().filter(|move_two| {
+                    !move_one.is_opposite(move_two) && self.is_move_valid_for_block(&mut temp_block, move_two)
+                });
+
+                next_moves.extend(move_moves);
+
+                let _ = temp_block.undo_move(&move_one);
+            }
+        }
+
+        next_moves
     }
 }
 
@@ -234,5 +331,12 @@ impl Board {
         self.blocks[block_idx] = positioned_block;
 
         Ok(())
+    }
+
+    pub fn get_next_moves(&self) -> Vec<Vec<Move>> {
+        self.blocks
+            .iter()
+            .map(|block| self.get_next_moves_for_block(block))
+            .collect()
     }
 }
