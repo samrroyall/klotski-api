@@ -125,3 +125,65 @@ impl PositionedBlock {
         self.make_move(&move_)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::game::board::{Board, Move};
+
+    #[test]
+    fn valid_blocks() {
+        assert!(
+            Block::from_id(1).is_some()
+                && Block::from_id(2).is_some()
+                && Block::from_id(3).is_some()
+                && Block::from_id(4).is_some()
+        );
+    }
+
+    #[test]
+    fn invalid_block() {
+        assert!(Block::from_id(5).is_none());
+    }
+
+    #[test]
+    fn valid_positioned_blocks() {
+        assert!(
+            PositionedBlock::new(1, 0, 0).is_some()
+                && PositionedBlock::new(1, Board::ROWS as u8 - 1, Board::COLS as u8 - 1).is_some()
+        );
+    }
+
+    #[test]
+    fn invalid_positioned_blocks() {
+        assert!(
+            PositionedBlock::new(4, Board::ROWS as u8 - 1, Board::COLS as u8 - 1).is_none()
+                && PositionedBlock::new(1, 0, Board::COLS as u8).is_none()
+        );
+    }
+
+    #[test]
+    fn positioned_block_from() {
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        let block_two = PositionedBlock::from_positioned_block(&block_one).unwrap();
+        assert!(block_one == block_two);
+    }
+
+    #[test]
+    fn positioned_block_make_move() {
+        let mut block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        let move_ = Move::new(1, 0).unwrap();
+        let res = block_one.make_move(&move_);
+        let block_two = PositionedBlock::new(1, 1, 0).unwrap();
+        assert!(res.is_ok() && block_one == block_two)
+    }
+
+    #[test]
+    fn positioned_block_undo_move() {
+        let mut block_two = PositionedBlock::new(1, 0, 1).unwrap();
+        let move_ = Move::new(0, 1).unwrap();
+        let res = block_two.undo_move(&move_);
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        assert!(res.is_ok() && block_one == block_two);
+    }
+}
