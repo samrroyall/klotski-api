@@ -14,14 +14,6 @@ impl Dimensions {
     pub const TWO_BY_ONE: Self = Self { rows: 2, cols: 1 };
     pub const TWO_BY_TWO: Self = Self { rows: 2, cols: 2 };
 
-    pub fn new(rows: u8, cols: u8) -> Option<Self> {
-        if rows == 0 || rows > Board::ROWS as u8 || cols == 0 || cols > Board::COLS as u8 {
-            return None;
-        }
-
-        Some(Self { rows, cols })
-    }
-
     pub fn rows(&self) -> u8 {
         self.rows
     }

@@ -177,10 +177,16 @@ impl Board {
             return Ok(());
         }
 
-        self.update_filled(&positioned_block, false);
+        let min_position = positioned_block.min_position();
 
-        let new_positioned_block =
-            PositionedBlock::from_positioned_block(&positioned_block).unwrap();
+        let new_positioned_block = PositionedBlock::new(
+            new_block_id,
+            min_position.row() as u8,
+            min_position.col() as u8,
+        )
+        .ok_or(BoardError::BlockPlacementInvalid)?;
+
+        self.update_filled(&positioned_block, false);
 
         if !self.is_placement_valid(&new_positioned_block) {
             self.update_filled(&positioned_block, true);
