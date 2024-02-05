@@ -163,6 +163,16 @@ mod tests {
     }
 
     #[test]
+    fn positioned_block_max_position() {
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        let block_two = PositionedBlock::new(4, 0, 1).unwrap();
+        assert!(
+            block_one.max_position() == Position::new(0, 0).unwrap()
+                && block_two.max_position() == Position::new(1, 2).unwrap()
+        );
+    }
+
+    #[test]
     fn positioned_block_from() {
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         let block_two = PositionedBlock::from_positioned_block(&block_one).unwrap();
