@@ -1,9 +1,9 @@
 use diesel::prelude::*;
 use uuid::Uuid;
 
-use crate::errors::domain::BoardError;
+use crate::errors::game::BoardError;
 use crate::models::db::schema::board_states::dsl::*;
-use crate::models::{db::tables::BoardState, domain::game::Board};
+use crate::models::{db::tables::BoardState, game::board::Board};
 use crate::services::db::DbPool;
 
 #[derive(Debug)]

@@ -1,7 +1,7 @@
 use diesel::prelude::*;
 use serde_json::to_string;
 
-use crate::models::domain::game::Board;
+use crate::models::game::board::Board;
 
 #[derive(AsChangeset, Insertable, Selectable, Queryable, Debug, Clone)]
 #[diesel(table_name = super::schema::board_states)]
@@ -28,7 +28,7 @@ impl BoardState {
     }
 
     pub fn to_board(&self) -> Board {
-        Board::from(
+        Board::new(
             serde_json::from_str(&self.blocks).unwrap(),
             serde_json::from_str(&self.moves).unwrap(),
             &serde_json::from_str(&self.filled).unwrap(),
