@@ -1,11 +1,16 @@
 use axum::{
+    debug_handler,
     extract::{Json, Path, Query},
     http::StatusCode,
-    response::{IntoResponse, Response as AxumResponse},
+    response::{IntoResponse, Response},
     Extension, Json as JsonResponse,
 };
 
-use crate::errors::{game::BoardError, http::HttpError};
+use super::utils::{
+    handle_board_state_repository_error as handle_repository_error, handle_json_rejection,
+    handle_path_rejection, handle_query_rejection,
+};
+use crate::errors::game::BoardError;
 use crate::models::{
     api::request::*,
     api::response::*,
@@ -14,23 +19,8 @@ use crate::models::{
 use crate::repositories::board_states::*;
 use crate::services::db::DbPool;
 
-fn handle_board_error(e: BoardError) -> HttpError {
-    match e {
-        BoardError::BlockIndexOutOfBounds
-        | BoardError::BlockInvalid
-        | BoardError::BlockPlacementInvalid => HttpError::BadRequest(e.to_string()),
-        BoardError::BoardNotFound => HttpError::NotFound(e.to_string()),
-    }
-}
-
-fn handle_repository_error(e: BoardStateRepositoryError) -> HttpError {
-    match e {
-        BoardStateRepositoryError::BoardError(e) => handle_board_error(e),
-        BoardStateRepositoryError::DieselError(e) => HttpError::InternalServerError(e.to_string()),
-    }
-}
-
-pub async fn new_board(axum::extract::Extension(pool): Extension<DbPool>) -> AxumResponse {
+#[debug_handler]
+pub async fn new_board(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(pool)
         .map(|board_state| {
             (
@@ -42,11 +32,18 @@ pub async fn new_board(axum::extract::Extension(pool): Extension<DbPool>) -> Axu
         .into_response()
 }
 
+#[debug_handler]
 pub async fn get_board(
     Extension(pool): Extension<DbPool>,
-    Query(params): Query<BoardQueryParams>,
-) -> AxumResponse {
-    get_board_state(&params.id, pool)
+    query_extraction: Option<Query<BoardQueryParams>>,
+) -> Response {
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let query_params = query_extraction.unwrap().0;
+
+    get_board_state(&query_params.id, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -57,50 +54,88 @@ pub async fn get_board(
         .into_response()
 }
 
+#[debug_handler]
 pub async fn delete_board(
     Extension(pool): Extension<DbPool>,
-    Query(params): Query<BoardQueryParams>,
-) -> AxumResponse {
-    delete_board_state(&params.id, pool)
+    query_extraction: Option<Query<BoardQueryParams>>,
+) -> Response {
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let query_params = query_extraction.unwrap().0;
+
+    delete_board_state(&query_params.id, pool)
         .map(|_| (StatusCode::OK, ()))
         .map_err(handle_repository_error)
         .into_response()
 }
 
+#[debug_handler]
 pub async fn add_block(
     Extension(pool): Extension<DbPool>,
-    Query(params): Query<BoardQueryParams>,
-    Json(payload): Json<AddBlockRequest>,
-) -> AxumResponse {
+    query_extraction: Option<Query<BoardQueryParams>>,
+    json_extraction: Option<Json<AddBlockRequest>>,
+) -> Response {
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let query_params = query_extraction.unwrap().0;
+
+    if json_extraction.is_none() {
+        return handle_json_rejection().into_response();
+    }
+
     let AddBlockRequest {
         block_id,
         min_row,
         min_col,
-    } = payload;
+    } = json_extraction.unwrap().0;
 
-    if let Some(positioned_block) = PositionedBlock::new(block_id, min_row, min_col) {
-        let update_fn = |board: &mut Board| board.add_block(positioned_block);
+    let update_fn = |board: &mut Board| {
+        if let Some(block) = PositionedBlock::new(block_id, min_row, min_col) {
+            return board.add_block(block);
+        }
+        Err(BoardError::BlockInvalid)
+    };
 
-        return update_board_state(&params.id, update_fn, pool)
-            .map(|board_state| {
-                (
-                    StatusCode::OK,
-                    JsonResponse(BuildingResponse::from(&board_state)),
-                )
-            })
-            .map_err(handle_repository_error)
-            .into_response();
-    }
-
-    HttpError::BadRequest("Invalid block provided".to_string()).into_response()
+    update_board_state(&query_params.id, update_fn, pool)
+        .map(|board_state| {
+            (
+                StatusCode::OK,
+                JsonResponse(BuildingResponse::from(&board_state)),
+            )
+        })
+        .map_err(handle_repository_error)
+        .into_response()
 }
 
+#[debug_handler]
 pub async fn alter_block(
     Extension(pool): Extension<DbPool>,
-    Path(block_idx): Path<usize>,
-    Query(params): Query<BoardQueryParams>,
-    Json(payload): Json<AlterBlockRequest>,
-) -> AxumResponse {
+    path_extraction: Option<Path<usize>>,
+    query_extraction: Option<Query<BoardQueryParams>>,
+    json_extraction: Option<Json<AlterBlockRequest>>,
+) -> Response {
+    if path_extraction.is_none() {
+        return handle_path_rejection().into_response();
+    }
+
+    let block_idx = path_extraction.unwrap().0;
+
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let query_params = query_extraction.unwrap().0;
+
+    if json_extraction.is_none() {
+        return handle_json_rejection().into_response();
+    }
+
+    let payload = json_extraction.unwrap().0;
+
     let update_fn = |board: &mut Board| match payload {
         AlterBlockRequest::ChangeBlock(change_block_data) => {
             board.change_block(block_idx, change_block_data.new_block_id)
@@ -112,7 +147,7 @@ pub async fn alter_block(
         ),
     };
 
-    update_board_state(&params.id, update_fn, pool)
+    update_board_state(&query_params.id, update_fn, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -123,14 +158,27 @@ pub async fn alter_block(
         .into_response()
 }
 
+#[debug_handler]
 pub async fn remove_block(
     Extension(pool): Extension<DbPool>,
-    Path(block_idx): Path<usize>,
-    Query(params): Query<BoardQueryParams>,
-) -> AxumResponse {
+    path_extraction: Option<Path<usize>>,
+    query_extraction: Option<Query<BoardQueryParams>>,
+) -> Response {
+    if path_extraction.is_none() {
+        return handle_path_rejection().into_response();
+    }
+
+    let block_idx = path_extraction.unwrap().0;
+
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let query_params = query_extraction.unwrap().0;
+
     let update_fn = |board: &mut Board| board.remove_block(block_idx);
 
-    update_board_state(&params.id, update_fn, pool)
+    update_board_state(&query_params.id, update_fn, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
