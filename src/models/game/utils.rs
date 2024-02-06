@@ -53,3 +53,27 @@ impl Position {
         [self.row, self.col]
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::models::game::board::Board;
+
+    #[test]
+    fn valid_positions() {
+        assert!(
+            Position::new(0, 0).is_some()
+                && Position::new(Board::ROWS as i8 - 1, Board::COLS as i8 - 1).is_some()
+        );
+    }
+
+    #[test]
+    fn invalid_positions() {
+        assert!(
+            Position::new(-1, 0).is_none()
+                && Position::new(0, -1).is_none()
+                && Position::new(Board::ROWS as i8, 0).is_none()
+                && Position::new(0, Board::COLS as i8).is_none()
+        );
+    }
+}

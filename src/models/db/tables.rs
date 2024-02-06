@@ -28,7 +28,7 @@ impl BoardState {
     }
 
     pub fn to_board(&self) -> Board {
-        Board::from(
+        Board::new(
             serde_json::from_str(&self.blocks).unwrap(),
             serde_json::from_str(&self.moves).unwrap(),
             &serde_json::from_str(&self.filled).unwrap(),
