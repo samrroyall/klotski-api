@@ -20,7 +20,8 @@ pub fn handle_board_state_repository_error(e: BoardStateRepositoryError) -> Http
         BoardStateRepositoryError::BoardError(e) => match e {
             BoardError::BlockIndexOutOfBounds
             | BoardError::BlockInvalid
-            | BoardError::BlockPlacementInvalid => HttpError::BadRequest(e.to_string()),
+            | BoardError::BlockPlacementInvalid
+            | BoardError::NoMovesToUndo => HttpError::BadRequest(e.to_string()),
             BoardError::BoardNotFound => HttpError::NotFound(e.to_string()),
         },
         BoardStateRepositoryError::DieselError(e) => HttpError::InternalServerError(e.to_string()),
