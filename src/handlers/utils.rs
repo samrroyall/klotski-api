@@ -11,10 +11,6 @@ pub fn handle_path_rejection() -> HttpError {
     HttpError::BadRequest("Invalid path parameters".to_string())
 }
 
-pub fn handle_query_rejection() -> HttpError {
-    HttpError::BadRequest("Invalid query parameters".to_string())
-}
-
 pub fn handle_board_state_repository_error(e: BoardStateRepositoryError) -> HttpError {
     match e {
         BoardStateRepositoryError::BoardError(e) => match e {

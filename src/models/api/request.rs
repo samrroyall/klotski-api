@@ -1,8 +1,14 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-pub struct BoardQueryParams {
-    pub id: String,
+#[derive(Debug, Deserialize)]
+pub struct BoardParams {
+    pub board_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BlockParams {
+    pub board_id: String,
+    pub block_idx: usize,
 }
 
 #[derive(Debug, Deserialize)]

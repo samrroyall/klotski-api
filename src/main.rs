@@ -14,13 +14,19 @@ async fn main() {
     let db_pool = services::db::get_db_pool();
 
     let board_routes = Router::new()
-        .route("/", get(handlers::board::get_board))
         .route("/", post(handlers::board::new_board))
-        .route("/", put(handlers::board::undo_move))
-        .route("/", delete(handlers::board::delete_board))
-        .route("/block", post(handlers::board::add_block))
-        .route("/block/:block_idx", put(handlers::board::alter_block))
-        .route("/block/:block_idx", delete(handlers::board::remove_block));
+        .route("/:board_id", get(handlers::board::get_board))
+        .route("/:board_id", put(handlers::board::undo_move))
+        .route("/:board_id", delete(handlers::board::delete_board))
+        .route("/:board_id/block", post(handlers::board::add_block))
+        .route(
+            "/:board_id/block/:block_idx",
+            put(handlers::board::alter_block),
+        )
+        .route(
+            "/:board_id/block/:block_idx",
+            delete(handlers::board::remove_block),
+        );
 
     let api_routes = Router::new().nest("/board", board_routes);
 
