@@ -143,13 +143,12 @@ fn move_block(
     row_diff: i8,
     col_diff: i8,
 ) -> Response {
-    let update_fn = |board: &mut Board| board.move_block(block_idx, row_diff, col_diff);
-
-    update_board_while_solving(board_id, update_fn, pool)
-}
-
-fn undo_move(board_id: &String, pool: DbPool) -> Response {
-    let update_fn = |board: &mut Board| board.undo_move();
+    let update_fn = |board: &mut Board| {
+        if !board.is_ready_to_solve() {
+            return Err(BoardError::BoardNotReady);
+        }
+        board.move_block(block_idx, row_diff, col_diff)
+    };
 
     update_board_while_solving(board_id, update_fn, pool)
 }
@@ -190,8 +189,28 @@ pub async fn alter_block(
             move_block_data.row_diff,
             move_block_data.col_diff,
         ),
-        AlterBlockRequest::UndoMove => undo_move(&board_id, pool),
     }
+}
+
+#[debug_handler]
+pub async fn undo_move(
+    Extension(pool): Extension<DbPool>,
+    query_extraction: Option<Query<BoardQueryParams>>,
+) -> Response {
+    if query_extraction.is_none() {
+        return handle_query_rejection().into_response();
+    }
+
+    let board_id = query_extraction.unwrap().0.id;
+
+    let update_fn = |board: &mut Board| {
+        if board.is_ready_to_solve() {
+            return Err(BoardError::BoardNotReady);
+        }
+        board.undo_move()
+    };
+
+    update_board_while_solving(&board_id, update_fn, pool)
 }
 
 #[debug_handler]

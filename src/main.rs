@@ -16,6 +16,7 @@ async fn main() {
     let board_routes = Router::new()
         .route("/", get(handlers::board::get_board))
         .route("/", post(handlers::board::new_board))
+        .route("/", put(handlers::board::undo_move))
         .route("/", delete(handlers::board::delete_board))
         .route("/block", post(handlers::board::add_block))
         .route("/block/:block_idx", put(handlers::board::alter_block))

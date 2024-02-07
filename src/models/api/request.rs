@@ -28,5 +28,4 @@ pub struct MoveBlockRequest {
 pub enum AlterBlockRequest {
     ChangeBlock(ChangeBlockRequest),
     MoveBlock(MoveBlockRequest),
-    UndoMove,
 }

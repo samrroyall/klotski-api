@@ -22,6 +22,7 @@ pub fn handle_board_state_repository_error(e: BoardStateRepositoryError) -> Http
             | BoardError::BlockInvalid
             | BoardError::BlockPlacementInvalid
             | BoardError::NoMovesToUndo => HttpError::BadRequest(e.to_string()),
+            BoardError::BoardNotReady => HttpError::NotAllowed(e.to_string()),
             BoardError::BoardNotFound => HttpError::NotFound(e.to_string()),
         },
         BoardStateRepositoryError::DieselError(e) => HttpError::InternalServerError(e.to_string()),
