@@ -6,10 +6,7 @@ use axum::{
     Extension, Json as JsonResponse,
 };
 
-use super::utils::{
-    handle_board_state_repository_error as handle_repository_error, handle_json_rejection,
-    handle_path_rejection, handle_query_rejection,
-};
+use super::utils::*;
 use crate::errors::game::BoardError;
 use crate::models::{
     api::request::*,
@@ -19,16 +16,46 @@ use crate::models::{
 use crate::repositories::board_states::*;
 use crate::services::db::DbPool;
 
+fn update_board_while_building<F>(board_id: &String, update_fn: F, pool: DbPool) -> Response
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    update_board_state_building(board_id, update_fn, pool)
+        .map(|board_state| {
+            (
+                StatusCode::OK,
+                JsonResponse(BuildingResponse::new(&board_state)),
+            )
+        })
+        .map_err(handle_board_state_repository_error)
+        .into_response()
+}
+
+fn update_board_while_solving<F>(board_id: &String, update_fn: F, pool: DbPool) -> Response
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    update_board_state_solving(board_id, update_fn, pool)
+        .map(|(board_state, next_moves)| {
+            (
+                StatusCode::OK,
+                JsonResponse(SolvingResponse::new(&board_state, &next_moves)),
+            )
+        })
+        .map_err(handle_board_state_repository_error)
+        .into_response()
+}
+
 #[debug_handler]
 pub async fn new_board(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
-                JsonResponse(BuildingResponse::from(&board_state)),
+                JsonResponse(BuildingResponse::new(&board_state)),
             )
         })
-        .map_err(handle_repository_error)
+        .map_err(handle_board_state_repository_error)
         .into_response()
 }
 
@@ -47,10 +74,10 @@ pub async fn get_board(
         .map(|board_state| {
             (
                 StatusCode::OK,
-                JsonResponse(BuildingResponse::from(&board_state)),
+                JsonResponse(BuildingResponse::new(&board_state)),
             )
         })
-        .map_err(handle_repository_error)
+        .map_err(handle_board_state_repository_error)
         .into_response()
 }
 
@@ -67,7 +94,7 @@ pub async fn delete_board(
 
     delete_board_state(&query_params.id, pool)
         .map(|_| (StatusCode::OK, ()))
-        .map_err(handle_repository_error)
+        .map_err(handle_board_state_repository_error)
         .into_response()
 }
 
@@ -81,7 +108,7 @@ pub async fn add_block(
         return handle_query_rejection().into_response();
     }
 
-    let query_params = query_extraction.unwrap().0;
+    let board_id = query_extraction.unwrap().0.id;
 
     if json_extraction.is_none() {
         return handle_json_rejection().into_response();
@@ -100,15 +127,31 @@ pub async fn add_block(
         Err(BoardError::BlockInvalid)
     };
 
-    update_board_state(&query_params.id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BuildingResponse::from(&board_state)),
-            )
-        })
-        .map_err(handle_repository_error)
-        .into_response()
+    update_board_while_building(&board_id, update_fn, pool)
+}
+
+fn change_block(board_id: &String, pool: DbPool, block_idx: usize, new_block_id: u8) -> Response {
+    let update_fn = |board: &mut Board| board.change_block(block_idx, new_block_id);
+
+    update_board_while_building(board_id, update_fn, pool)
+}
+
+fn move_block(
+    board_id: &String,
+    pool: DbPool,
+    block_idx: usize,
+    row_diff: i8,
+    col_diff: i8,
+) -> Response {
+    let update_fn = |board: &mut Board| board.move_block(block_idx, row_diff, col_diff);
+
+    update_board_while_solving(board_id, update_fn, pool)
+}
+
+fn undo_move(board_id: &String, pool: DbPool) -> Response {
+    let update_fn = |board: &mut Board| board.undo_move();
+
+    update_board_while_solving(board_id, update_fn, pool)
 }
 
 #[debug_handler]
@@ -128,7 +171,7 @@ pub async fn alter_block(
         return handle_query_rejection().into_response();
     }
 
-    let query_params = query_extraction.unwrap().0;
+    let board_id = query_extraction.unwrap().0.id;
 
     if json_extraction.is_none() {
         return handle_json_rejection().into_response();
@@ -136,26 +179,19 @@ pub async fn alter_block(
 
     let payload = json_extraction.unwrap().0;
 
-    let update_fn = |board: &mut Board| match payload {
+    match payload {
         AlterBlockRequest::ChangeBlock(change_block_data) => {
-            board.change_block(block_idx, change_block_data.new_block_id)
+            change_block(&board_id, pool, block_idx, change_block_data.new_block_id)
         }
-        AlterBlockRequest::MoveBlock(move_block_data) => board.move_block(
+        AlterBlockRequest::MoveBlock(move_block_data) => move_block(
+            &board_id,
+            pool,
             block_idx,
             move_block_data.row_diff,
             move_block_data.col_diff,
         ),
-    };
-
-    update_board_state(&query_params.id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BuildingResponse::from(&board_state)),
-            )
-        })
-        .map_err(handle_repository_error)
-        .into_response()
+        AlterBlockRequest::UndoMove => undo_move(&board_id, pool),
+    }
 }
 
 #[debug_handler]
@@ -174,17 +210,9 @@ pub async fn remove_block(
         return handle_query_rejection().into_response();
     }
 
-    let query_params = query_extraction.unwrap().0;
+    let board_id = query_extraction.unwrap().0.id;
 
     let update_fn = |board: &mut Board| board.remove_block(block_idx);
 
-    update_board_state(&query_params.id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BuildingResponse::from(&board_state)),
-            )
-        })
-        .map_err(handle_repository_error)
-        .into_response()
+    update_board_while_building(&board_id, update_fn, pool)
 }
