@@ -3,7 +3,10 @@ use uuid::Uuid;
 
 use crate::errors::game::BoardError;
 use crate::models::db::schema::board_states::dsl::*;
-use crate::models::{db::tables::BoardState, game::board::Board};
+use crate::models::{
+    db::tables::BoardState,
+    game::{board::Board, move_::Move},
+};
 use crate::services::db::DbPool;
 
 #[derive(Debug)]
@@ -74,11 +77,11 @@ pub fn delete_board_state(
     Ok(())
 }
 
-pub fn update_board_state<F>(
+fn get_updated_board<F>(
     search_id: &String,
     update_fn: F,
-    pool: DbPool,
-) -> Result<BoardState, BoardStateRepositoryError>
+    pool: &DbPool,
+) -> Result<Board, BoardStateRepositoryError>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -92,11 +95,49 @@ where
 
     update_fn(&mut board)?;
 
-    let new_board_state = BoardState::from(search_id, &board);
+    Ok(board)
+}
+
+pub fn update_board_state_building<F>(
+    search_id: &String,
+    update_fn: F,
+    pool: DbPool,
+) -> Result<BoardState, BoardStateRepositoryError>
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    let updated_board = get_updated_board(search_id, update_fn, &pool)?;
+
+    let new_board_state = BoardState::from(search_id, &updated_board);
+
+    let mut conn = pool.get().unwrap();
 
     diesel::update(board_states.filter(id.eq(search_id)))
         .set(new_board_state.clone())
         .execute(&mut conn)?;
 
     Ok(new_board_state)
+}
+
+pub fn update_board_state_solving<F>(
+    search_id: &String,
+    update_fn: F,
+    pool: DbPool,
+) -> Result<(BoardState, Vec<Vec<Move>>), BoardStateRepositoryError>
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    let mut updated_board = get_updated_board(search_id, update_fn, &pool)?;
+
+    let next_moves = updated_board.get_next_moves();
+
+    let new_board_state = BoardState::from(search_id, &updated_board);
+
+    let mut conn = pool.get().unwrap();
+
+    diesel::update(board_states.filter(id.eq(search_id)))
+        .set(new_board_state.clone())
+        .execute(&mut conn)?;
+
+    Ok((new_board_state, next_moves))
 }

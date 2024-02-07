@@ -1,70 +1,32 @@
 use serde::{Deserialize, Serialize};
 
-use super::block::PositionedBlock;
+use super::{block::PositionedBlock, move_::Move};
 use crate::errors::game::BoardError;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
-pub struct Move {
-    row_diff: i8,
-    col_diff: i8,
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BoardMove {
+    block_idx: usize,
+    move_: Move,
 }
 
-impl Move {
-    pub const UP_ONE: Self = Self {
-        row_diff: -1,
-        col_diff: 0,
-    };
-    pub const DOWN_ONE: Self = Self {
-        row_diff: 1,
-        col_diff: 0,
-    };
-    pub const LEFT_ONE: Self = Self {
-        row_diff: 0,
-        col_diff: -1,
-    };
-    pub const RIGHT_ONE: Self = Self {
-        row_diff: 0,
-        col_diff: 1,
-    };
-
-    pub const ALL_ONE_STEP_MOVES: [Self; 4] = [
-        Self::UP_ONE,
-        Self::DOWN_ONE,
-        Self::LEFT_ONE,
-        Self::RIGHT_ONE,
-    ];
-
-    pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
-        let diff = row_diff.abs() + col_diff.abs();
-
-        if diff > Board::NUM_EMPTY_CELLS as i8 || diff == 0 {
-            return None;
-        }
-
-        Some(Self { row_diff, col_diff })
+impl BoardMove {
+    pub fn new(block_idx: usize, move_: Move) -> Self {
+        Self { block_idx, move_ }
     }
 
-    pub fn row_diff(&self) -> i8 {
-        self.row_diff
+    pub fn block_idx(&self) -> usize {
+        self.block_idx
     }
 
-    pub fn col_diff(&self) -> i8 {
-        self.col_diff
-    }
-
-    pub fn to_array(&self) -> [i8; 2] {
-        [self.row_diff, self.col_diff]
-    }
-
-    pub fn is_opposite(&self, other: &Self) -> bool {
-        self.row_diff == -other.row_diff && self.col_diff == -other.col_diff
+    pub fn move_(&self) -> Move {
+        self.move_.clone()
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct Board {
     blocks: Vec<PositionedBlock>,
-    moves: Vec<Move>,
+    moves: Vec<BoardMove>,
     filled: [[bool; Self::COLS]; Self::ROWS],
 }
 
@@ -151,7 +113,7 @@ impl Board {
 impl Board {
     pub fn new(
         blocks: Vec<PositionedBlock>,
-        moves: Vec<Move>,
+        moves: Vec<BoardMove>,
         filled: &[[bool; Self::COLS]; Self::ROWS],
     ) -> Self {
         Self {
@@ -169,7 +131,7 @@ impl Board {
         self.filled
     }
 
-    pub fn moves(&self) -> Vec<Move> {
+    pub fn moves(&self) -> Vec<BoardMove> {
         self.moves.clone()
     }
 
@@ -282,6 +244,8 @@ impl Board {
 
             self.blocks[block_idx] = temp_block;
 
+            self.moves.push(BoardMove::new(block_idx, move_));
+
             return Ok(());
         }
 
@@ -290,6 +254,25 @@ impl Board {
         self.update_filled(&original_block, true);
 
         Err(BoardError::BlockPlacementInvalid)
+    }
+
+    pub fn undo_move(&mut self) -> Result<(), BoardError> {
+        if self.moves.is_empty() {
+            return Err(BoardError::NoMovesToUndo);
+        }
+
+        let BoardMove { block_idx, move_ } = self.moves.pop().unwrap();
+        let [row_diff, col_diff] = move_.to_array();
+
+        if let Err(e) = self.move_block(block_idx, -row_diff, -col_diff) {
+            self.moves.push(BoardMove::new(block_idx, move_));
+
+            return Err(e);
+        }
+
+        let _ = self.moves.pop();
+
+        Ok(())
     }
 
     pub fn get_next_moves(&mut self) -> Vec<Vec<Move>> {
@@ -306,36 +289,6 @@ impl Board {
 mod tests {
     use super::*;
     use std::collections::HashSet;
-
-    #[test]
-    fn valid_moves() {
-        assert!(
-            Move::new(1, 1).is_some()
-                && Move::new(-1, 1).is_some()
-                && Move::new(1, -1).is_some()
-                && Move::new(-1, -1).is_some()
-        )
-    }
-
-    #[test]
-    fn invalid_moves() {
-        assert!(
-            Move::new(-3, 0).is_none()
-                && Move::new(0, -3).is_none()
-                && Move::new(3, 0).is_none()
-                && Move::new(0, 3).is_none()
-                && Move::new(1, 2).is_none()
-                && Move::new(-2, 1).is_none()
-        );
-    }
-
-    #[test]
-    fn move_is_opposite() {
-        let move_one = Move::new(1, 0).unwrap();
-        let move_two = Move::new(-1, 0).unwrap();
-
-        assert!(move_one.is_opposite(&move_two));
-    }
 
     #[test]
     fn find_block() {
@@ -557,6 +510,74 @@ mod tests {
         );
         assert!(board.move_block(1, 0, 1).is_err());
         assert!(board.move_block(1, 1, 0).is_err());
+    }
+
+    #[test]
+    fn undo_move() {
+        let mut board = Board::default();
+        let block = PositionedBlock::new(1, 2, 0).unwrap();
+        board.update_filled(&block, true);
+        board.blocks.push(block);
+        board.moves = vec![
+            BoardMove::new(0, Move::RIGHT_ONE),
+            BoardMove::new(0, Move::DOWN_ONE),
+            BoardMove::new(0, Move::LEFT_ONE),
+            BoardMove::new(0, Move::DOWN_ONE),
+        ];
+
+        assert!(board.undo_move().is_ok());
+        assert_eq!(board.moves.len(), 3);
+        assert_eq!(
+            board.filled,
+            [
+                [false, false, false, false],
+                [true, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.undo_move().is_ok());
+        assert_eq!(board.moves.len(), 2);
+        assert_eq!(
+            board.filled,
+            [
+                [false, false, false, false],
+                [false, true, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.undo_move().is_ok());
+        assert_eq!(board.moves.len(), 1);
+        assert_eq!(
+            board.filled,
+            [
+                [false, true, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.undo_move().is_ok());
+        assert_eq!(board.moves.len(), 0);
+        assert_eq!(
+            board.filled,
+            [
+                [true, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.undo_move().is_err());
     }
 
     #[test]

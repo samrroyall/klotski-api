@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use crate::errors::game::BoardError;
 
 use super::{
-    board::Move,
+    move_::Move,
     utils::{Dimensions, Position},
 };
 
@@ -129,7 +129,7 @@ impl PositionedBlock {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::board::{Board, Move};
+    use crate::models::game::{board::Board, move_::Move};
 
     #[test]
     fn valid_blocks() {

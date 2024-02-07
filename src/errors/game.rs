@@ -7,6 +7,8 @@ pub enum BoardError {
     BlockInvalid,
     BlockPlacementInvalid,
     BoardNotFound,
+    BoardNotReady,
+    NoMovesToUndo,
 }
 
 impl error::Error for BoardError {}
@@ -18,6 +20,8 @@ impl fmt::Display for BoardError {
             BoardError::BlockInvalid => write!(f, "Block ID provided is invalid"),
             BoardError::BlockPlacementInvalid => write!(f, "Block placement is invalid"),
             BoardError::BoardNotFound => write!(f, "No board with matching ID"),
+            BoardError::BoardNotReady => write!(f, "Board not ready to solve"),
+            BoardError::NoMovesToUndo => write!(f, "No board moves to undo"),
         }
     }
 }

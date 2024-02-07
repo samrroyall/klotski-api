@@ -4,6 +4,7 @@ use std::fmt;
 
 #[derive(Debug)]
 pub enum HttpError {
+    NotAllowed(String),
     NotFound(String),
     BadRequest(String),
     InternalServerError(String),
@@ -14,6 +15,7 @@ impl std::error::Error for HttpError {}
 impl fmt::Display for HttpError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
+            HttpError::NotAllowed(ref msg) => write!(f, "Not allowed: {}", msg),
             HttpError::NotFound(ref msg) => write!(f, "Not found: {}", msg),
             HttpError::BadRequest(ref msg) => write!(f, "Invalid input: {}", msg),
             HttpError::InternalServerError(ref msg) => write!(f, "Internal server error: {}", msg),
@@ -24,6 +26,7 @@ impl fmt::Display for HttpError {
 impl axum::response::IntoResponse for HttpError {
     fn into_response(self) -> axum::response::Response {
         let status = match self {
+            HttpError::NotAllowed(_) => StatusCode::METHOD_NOT_ALLOWED,
             HttpError::NotFound(_) => StatusCode::NOT_FOUND,
             HttpError::BadRequest(_) => StatusCode::BAD_REQUEST,
             HttpError::InternalServerError(_) => StatusCode::INTERNAL_SERVER_ERROR,

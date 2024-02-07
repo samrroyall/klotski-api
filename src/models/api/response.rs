@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-use crate::models::db::tables::BoardState;
+use crate::models::{db::tables::BoardState, game::move_::Move};
 
 #[derive(Serialize)]
 pub struct BuildingResponse {
@@ -10,7 +10,7 @@ pub struct BuildingResponse {
 }
 
 impl BuildingResponse {
-    pub fn from(board_state: &BoardState) -> Self {
+    pub fn new(board_state: &BoardState) -> Self {
         Self {
             id: board_state.id.clone(),
             blocks: board_state.blocks.clone(),
@@ -23,6 +23,17 @@ impl BuildingResponse {
 pub struct SolvingResponse {
     id: String,
     blocks: String,
-    available_moves: String,
+    next_moves: String,
     is_solved: bool,
+}
+
+impl SolvingResponse {
+    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<Move>>) -> Self {
+        Self {
+            id: board_state.id.clone(),
+            blocks: board_state.blocks.clone(),
+            next_moves: serde_json::to_string(next_moves).unwrap(),
+            is_solved: board_state.is_solved,
+        }
+    }
 }
