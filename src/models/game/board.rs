@@ -1,6 +1,8 @@
+use std::collections::HashSet;
+
 use serde::{Deserialize, Serialize};
 
-use super::{block::PositionedBlock, move_::Move};
+use super::{block::PositionedBlock, move_::Move, utils::Position};
 use crate::errors::game::BoardError;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -60,12 +62,9 @@ impl Board {
         }
     }
 
-    fn is_placement_valid(&self, positioned_block: &PositionedBlock) -> bool {
-        let [min_row, min_col] = positioned_block.min_position().to_array();
-        let [max_row, max_col] = positioned_block.max_position().to_array();
-
-        for i in min_row..=max_row {
-            for j in min_col..=max_col {
+    fn is_range_empty(&self, range: (Position, Position)) -> bool {
+        for i in range.0.row()..=range.1.row() {
+            for j in range.0.col()..=range.1.col() {
                 if self.filled[i][j] {
                     return false;
                 }
@@ -75,38 +74,75 @@ impl Board {
         true
     }
 
-    fn is_move_valid_for_block(&mut self, block: &PositionedBlock, move_: &Move) -> bool {
-        let mut temp_block = block.clone();
-
-        self.update_filled(&temp_block, false);
-
-        if temp_block.make_move(move_).is_ok() {
-            let res = self.is_placement_valid(&temp_block);
-
-            let _ = temp_block.undo_move(move_);
-
-            self.update_filled(&temp_block, true);
-
-            return res;
+    fn is_step_valid_for_block(&self, block: &PositionedBlock, step: &Move) -> bool {
+        if step.row_diff().abs() + step.col_diff().abs() > 1 {
+            return false;
         }
 
-        false
+        let [min_row, min_col] = block.min_position().to_array();
+        let [max_row, max_col] = block.max_position().to_array();
+
+        match step.to_array() {
+            [-1, 0] => (min_col..=max_col).all(|col| {
+                if let Some(new_position) = Position::new(min_row as i8 - 1, col as i8) {
+                    return !self.filled[new_position.row()][col];
+                }
+                false
+            }),
+            [1, 0] => (min_col..=max_col).all(|col| {
+                if let Some(new_position) = Position::new(max_row as i8 + 1, col as i8) {
+                    return !self.filled[new_position.row()][col];
+                }
+                false
+            }),
+            [0, -1] => (min_row..=max_row).all(|row| {
+                if let Some(new_position) = Position::new(row as i8, min_col as i8 - 1) {
+                    return !self.filled[row][new_position.col()];
+                }
+                false
+            }),
+            [0, 1] => (min_row..=max_row).all(|row| {
+                if let Some(new_position) = Position::new(row as i8, max_col as i8 + 1) {
+                    return !self.filled[row][new_position.col()];
+                }
+                false
+            }),
+            _ => false,
+        }
     }
 
-    fn get_next_moves_for_block(&mut self, block: &PositionedBlock) -> Vec<Move> {
-        let mut next_moves = vec![];
+    fn get_next_moves_for_block(&mut self, block: &PositionedBlock) -> HashSet<Move> {
+        let mut moves = HashSet::new();
 
-        for row_diff in -2..=2 {
-            for col_diff in -2..=2 {
-                if let Some(move_) = Move::new(row_diff, col_diff) {
-                    if self.is_move_valid_for_block(block, &move_) {
-                        next_moves.push(move_);
-                    }
-                }
+        let mut temp_block = block.clone();
+
+        for step_one in Move::ALL_ONE_STEP_MOVES {
+            if !self.is_step_valid_for_block(block, &step_one) {
+                continue;
             }
+
+            let _ = temp_block.make_move(&step_one);
+
+            for step_two in Move::ALL_ONE_STEP_MOVES {
+                if !self.is_step_valid_for_block(&temp_block, &step_two) {
+                    continue;
+                }
+
+                moves.insert(
+                    Move::new(
+                        step_one.row_diff() + step_two.row_diff(),
+                        step_one.col_diff() + step_two.col_diff(),
+                    )
+                    .unwrap(),
+                );
+            }
+
+            let _ = temp_block.undo_move(&step_one);
+
+            moves.insert(step_one);
         }
 
-        next_moves
+        moves
     }
 }
 
@@ -140,11 +176,11 @@ impl Board {
 
         for block in self.blocks.iter() {
             let block_id = block.block_id();
-            let [min_row, min_col] = block.min_position().to_array();
-            let [max_row, max_col] = block.max_position().to_array();
 
-            for i in min_row..=max_row {
-                for j in min_col..=max_col {
+            let (min_position, max_position) = block.range();
+
+            for i in min_position.row()..=max_position.row() {
+                for j in min_position.col()..=max_position.col() {
                     board[i][j] = block_id;
                 }
             }
@@ -187,14 +223,14 @@ impl Board {
         self.find_block(&winning_block).is_some()
     }
 
-    pub fn add_block(&mut self, positioned_block: PositionedBlock) -> Result<(), BoardError> {
-        if !self.is_placement_valid(&positioned_block) {
+    pub fn add_block(&mut self, block: PositionedBlock) -> Result<(), BoardError> {
+        if !self.is_range_empty(block.range()) {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_filled(&positioned_block, true);
+        self.update_filled(&block, true);
 
-        self.blocks.push(positioned_block);
+        self.blocks.push(block);
 
         Ok(())
     }
@@ -218,32 +254,32 @@ impl Board {
             return Err(BoardError::BlockIndexOutOfBounds);
         }
 
-        let positioned_block = self.blocks[block_idx].clone();
+        let block = self.blocks[block_idx].clone();
 
-        if positioned_block.block_id() == new_block_id {
+        if block.block_id() == new_block_id {
             return Ok(());
         }
 
-        let min_position = positioned_block.min_position();
+        let min_position = block.min_position();
 
-        let new_positioned_block = PositionedBlock::new(
+        let new_block = PositionedBlock::new(
             new_block_id,
             min_position.row() as u8,
             min_position.col() as u8,
         )
         .ok_or(BoardError::BlockPlacementInvalid)?;
 
-        self.update_filled(&positioned_block, false);
+        self.update_filled(&block, false);
 
-        if !self.is_placement_valid(&new_positioned_block) {
-            self.update_filled(&positioned_block, true);
+        if !self.is_range_empty(new_block.range()) {
+            self.update_filled(&block, true);
 
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_filled(&new_positioned_block, true);
+        self.update_filled(&new_block, true);
 
-        self.blocks[block_idx] = new_positioned_block;
+        self.blocks[block_idx] = new_block;
 
         Ok(())
     }
@@ -264,7 +300,7 @@ impl Board {
 
         self.update_filled(&temp_block, false);
 
-        if temp_block.make_move(&move_).is_ok() && self.is_placement_valid(&temp_block) {
+        if temp_block.make_move(&move_).is_ok() && self.is_range_empty(temp_block.range()) {
             self.update_filled(&temp_block, true);
 
             self.blocks[block_idx] = temp_block;
@@ -306,6 +342,7 @@ impl Board {
         blocks
             .iter()
             .map(|block| self.get_next_moves_for_block(block))
+            .map(|moves| moves.into_iter().collect())
             .collect()
     }
 }
@@ -340,65 +377,121 @@ mod tests {
     }
 
     #[test]
-    fn is_placement_valid() {
+    fn is_range_empty() {
         let mut board = Board::default();
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         let block_two = PositionedBlock::new(2, 1, 0).unwrap();
         board.update_filled(&block_one, true);
 
-        assert!(!board.is_placement_valid(&block_one));
-        assert!(board.is_placement_valid(&block_two));
+        assert!(!board.is_range_empty(block_one.range()));
+        assert!(board.is_range_empty(block_two.range()));
     }
 
     #[test]
-    fn is_move_valid_for_block() {
+    fn is_step_valid_for_block() {
+        let mut board = Board::default();
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        let block_two = PositionedBlock::new(2, 0, 1).unwrap();
+        board.update_filled(&block_one, true);
+        board.update_filled(&block_two, true);
+
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::LEFT_ONE));
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::RIGHT_ONE));
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::UP_ONE));
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::new(1, 1).unwrap()));
+        assert!(board.is_step_valid_for_block(&block_one, &Move::DOWN_ONE));
+
+        let block_three = PositionedBlock::new(1, 1, 0).unwrap();
+        board.update_filled(&block_three, true);
+
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::new(1, 1).unwrap()));
+        assert!(!board.is_step_valid_for_block(&block_one, &Move::DOWN_ONE));
+
+        assert_eq!(
+            board.filled(),
+            [
+                [true, true, true, false],
+                [true, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        )
+    }
+
+    #[test]
+    fn get_next_moves_for_block_down_right() {
         let mut board = Board::default();
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         let block_two = PositionedBlock::new(1, 0, 1).unwrap();
+        let block_three = PositionedBlock::new(1, 1, 0).unwrap();
         board.update_filled(&block_one, true);
-
-        assert!(
-            !board.is_move_valid_for_block(&block_one, &Move::LEFT_ONE)
-                && !board.is_move_valid_for_block(&block_one, &Move::UP_ONE)
-                && board.is_move_valid_for_block(&block_one, &Move::RIGHT_ONE)
-                && board.is_move_valid_for_block(&block_one, &Move::DOWN_ONE)
-        );
-
         board.update_filled(&block_two, true);
+        board.update_filled(&block_three, true);
+        let block_one_moves = board.get_next_moves_for_block(&block_one);
 
-        assert!(
-            !board.is_move_valid_for_block(&block_one, &Move::LEFT_ONE)
-                && !board.is_move_valid_for_block(&block_one, &Move::RIGHT_ONE)
-                && !board.is_move_valid_for_block(&block_one, &Move::UP_ONE)
-                && board.is_move_valid_for_block(&block_one, &Move::DOWN_ONE)
-                && !board.is_move_valid_for_block(&block_two, &Move::LEFT_ONE)
-                && board.is_move_valid_for_block(&block_two, &Move::RIGHT_ONE)
-                && !board.is_move_valid_for_block(&block_two, &Move::UP_ONE)
-                && board.is_move_valid_for_block(&block_two, &Move::DOWN_ONE)
+        assert_eq!(block_one_moves.len(), 0);
+
+        let block_two_moves = board.get_next_moves_for_block(&block_two);
+
+        assert_eq!(
+            board.filled(),
+            [
+                [true, true, false, false],
+                [true, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+        assert_eq!(
+            block_two_moves,
+            HashSet::from([
+                Move::new(0, 1).unwrap(),
+                Move::new(0, 2).unwrap(),
+                Move::new(1, 1).unwrap(),
+                Move::new(1, 0).unwrap(),
+                Move::new(2, 0).unwrap(),
+            ]),
         );
     }
 
     #[test]
-    fn get_next_moves_for_block() {
+    fn get_next_moves_for_block_up_left() {
         let mut board = Board::default();
-        let block = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_filled(&block, true);
+        let block_one = PositionedBlock::new(1, 4, 3).unwrap();
+        let block_two = PositionedBlock::new(1, 4, 2).unwrap();
+        let block_three = PositionedBlock::new(1, 3, 3).unwrap();
+        board.update_filled(&block_one, true);
+        board.update_filled(&block_two, true);
+        board.update_filled(&block_three, true);
+        let block_one_moves = board.get_next_moves_for_block(&block_one);
 
-        let move_set = HashSet::from([
-            Move::new(1, 0).unwrap(),
-            Move::new(2, 0).unwrap(),
-            Move::new(1, 1).unwrap(),
-            Move::new(0, 1).unwrap(),
-            Move::new(0, 2).unwrap(),
-        ]);
+        assert_eq!(block_one_moves.len(), 0);
 
-        let next_moves = board.get_next_moves_for_block(&block);
+        let block_two_moves = board.get_next_moves_for_block(&block_two);
 
-        assert_eq!(next_moves.len(), 5);
+        assert_eq!(
+            board.filled(),
+            [
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, true],
+                [false, false, true, true],
+            ]
+        );
 
-        for move_ in next_moves.iter() {
-            assert!(move_set.contains(move_));
-        }
+        assert_eq!(
+            block_two_moves,
+            HashSet::from([
+                Move::new(0, -1).unwrap(),
+                Move::new(0, -2).unwrap(),
+                Move::new(-1, -1).unwrap(),
+                Move::new(-1, 0).unwrap(),
+                Move::new(-2, 0).unwrap(),
+            ]),
+        );
     }
 
     #[test]
@@ -607,43 +700,25 @@ mod tests {
 
     #[test]
     fn get_next_moves() {
+        let blocks = vec![
+            PositionedBlock::new(3, 0, 0).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(3, 0, 3).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 1).unwrap(),
+            PositionedBlock::new(3, 2, 3).unwrap(),
+            PositionedBlock::new(1, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 2).unwrap(),
+            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(1, 4, 3).unwrap(),
+        ];
+
         let mut board = Board::default();
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        let block_two = PositionedBlock::new(1, 4, 3).unwrap();
-        board.update_filled(&block_one, true);
-        board.blocks.push(block_one);
-        board.update_filled(&block_two, true);
-        board.blocks.push(block_two);
-
-        let block_one_move_set = HashSet::from([
-            Move::new(1, 0).unwrap(),
-            Move::new(2, 0).unwrap(),
-            Move::new(0, 1).unwrap(),
-            Move::new(0, 2).unwrap(),
-            Move::new(1, 1).unwrap(),
-        ]);
-
-        let block_two_move_set = HashSet::from([
-            Move::new(-1, 0).unwrap(),
-            Move::new(-2, 0).unwrap(),
-            Move::new(0, -1).unwrap(),
-            Move::new(0, -2).unwrap(),
-            Move::new(-1, -1).unwrap(),
-        ]);
-
+        for block in blocks {
+            board.add_block(block).unwrap();
+        }
         let next_moves = board.get_next_moves();
 
-        assert_eq!(next_moves.len(), 2);
-        assert_eq!(next_moves[0].len(), 5);
-
-        for move_ in next_moves[0].iter() {
-            assert!(block_one_move_set.contains(move_));
-        }
-
-        assert_eq!(next_moves[1].len(), 5);
-
-        for move_ in next_moves[1].iter() {
-            assert!(block_two_move_set.contains(move_));
-        }
+        assert_eq!(next_moves.iter().fold(0, |acc, moves| acc + moves.len()), 8);
     }
 }
