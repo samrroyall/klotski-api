@@ -118,6 +118,10 @@ impl PositionedBlock {
         Ok(())
     }
 
+    pub fn range(&self) -> (Position, Position) {
+        (self.min_position.clone(), self.max_position.clone())
+    }
+
     pub fn undo_move(&mut self, move_: &Move) -> Result<(), BoardError> {
         let move_ = Move::new(-move_.row_diff(), -move_.col_diff())
             .ok_or(BoardError::BlockPlacementInvalid)?;
