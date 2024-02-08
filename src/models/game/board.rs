@@ -23,6 +23,10 @@ impl BoardMove {
     pub fn move_(&self) -> Move {
         self.move_.clone()
     }
+
+    pub fn is_opposite(&self, other: &BoardMove) -> bool {
+        self.block_idx == other.block_idx && self.move_.is_opposite(&other.move_)
+    }
 }
 
 #[derive(Debug, Clone)]
