@@ -14,7 +14,7 @@ use crate::models::{
     game::{block::PositionedBlock, board::Board},
 };
 use crate::repositories::board_states::*;
-use crate::services::db::DbPool;
+use crate::services::{db::DbPool, solver::Solver};
 
 fn update_board_while_building<F>(board_id: &String, update_fn: F, pool: DbPool) -> Response
 where
@@ -49,28 +49,6 @@ where
 #[debug_handler]
 pub async fn new_board(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BuildingResponse::new(&board_state)),
-            )
-        })
-        .map_err(handle_board_state_repository_error)
-        .into_response()
-}
-
-#[debug_handler]
-pub async fn get_board(
-    Extension(pool): Extension<DbPool>,
-    path_extraction: Option<Path<BoardParams>>,
-) -> Response {
-    if path_extraction.is_none() {
-        return handle_path_rejection().into_response();
-    }
-
-    let BoardParams { board_id } = path_extraction.unwrap().0;
-
-    get_board_state(&board_id, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -226,4 +204,38 @@ pub async fn remove_block(
     let update_fn = |board: &mut Board| board.remove_block(block_idx);
 
     update_board_while_building(&board_id, update_fn, pool)
+}
+
+#[debug_handler]
+pub async fn solve_board(
+    Extension(pool): Extension<DbPool>,
+    path_extraction: Option<Path<BoardParams>>,
+) -> Response {
+    if path_extraction.is_none() {
+        return handle_path_rejection().into_response();
+    }
+
+    let BoardParams { board_id } = path_extraction.unwrap().0;
+
+    get_board_state(&board_id, pool)
+        .map(|board_state| {
+            let board = board_state.to_board();
+
+            Solver::new(board)
+                .map(|mut solver| {
+                    let maybe_solution = solver.solve();
+
+                    (
+                        StatusCode::OK,
+                        JsonResponse(if let Some(moves) = maybe_solution {
+                            SolveResponse::Solved(SolvedResponse::new(&moves))
+                        } else {
+                            SolveResponse::UnableToSolve
+                        }),
+                    )
+                })
+                .map_err(handle_board_error)
+        })
+        .map_err(handle_board_state_repository_error)
+        .into_response()
 }

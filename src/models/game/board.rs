@@ -135,6 +135,31 @@ impl Board {
         self.moves.clone()
     }
 
+    pub fn hash(&self) -> String {
+        let mut board = [[0u8; Self::COLS]; Self::ROWS];
+
+        for block in self.blocks.iter() {
+            let block_id = block.block_id();
+            let [min_row, min_col] = block.min_position().to_array();
+            let [max_row, max_col] = block.max_position().to_array();
+
+            for i in min_row..=max_row {
+                for j in min_col..=max_col {
+                    board[i][j] = block_id;
+                }
+            }
+        }
+
+        board
+            .into_iter()
+            .map(|row| {
+                row.into_iter()
+                    .map(|cell| cell.to_string())
+                    .collect::<String>()
+            })
+            .collect()
+    }
+
     pub fn is_ready_to_solve(&self) -> bool {
         let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
             acc + (curr.block_id() == Self::WINNING_BLOCK_ID) as u8
