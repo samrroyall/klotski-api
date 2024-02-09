@@ -127,7 +127,7 @@ pub fn update_board_state_solving<F>(
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
-    let mut updated_board = get_updated_board(search_id, update_fn, &pool)?;
+    let updated_board = get_updated_board(search_id, update_fn, &pool)?;
 
     let next_moves = updated_board.get_next_moves();
 

@@ -17,7 +17,9 @@ pub fn handle_board_error(e: BoardError) -> HttpError {
         | BoardError::BlockInvalid
         | BoardError::BlockPlacementInvalid
         | BoardError::NoMovesToUndo => HttpError::BadRequest(e.to_string()),
-        BoardError::BoardNotReady => HttpError::NotAllowed(e.to_string()),
+        BoardError::BoardAlreadySolved | BoardError::BoardNotReady => {
+            HttpError::NotAllowed(e.to_string())
+        }
         BoardError::BoardNotFound => HttpError::NotFound(e.to_string()),
     }
 }

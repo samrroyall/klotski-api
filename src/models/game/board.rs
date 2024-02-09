@@ -115,7 +115,7 @@ impl Board {
         }
     }
 
-    fn get_next_moves_for_block(&mut self, block: &PositionedBlock) -> HashSet<Move> {
+    fn get_next_moves_for_block(&self, block: &PositionedBlock) -> HashSet<Move> {
         let mut moves = HashSet::new();
 
         let mut temp_block = block.clone();
@@ -340,7 +340,7 @@ impl Board {
         Ok(())
     }
 
-    pub fn get_next_moves(&mut self) -> Vec<Vec<Move>> {
+    pub fn get_next_moves(&self) -> Vec<Vec<Move>> {
         let blocks = self.blocks.clone();
 
         blocks
