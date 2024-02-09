@@ -8,11 +8,15 @@ use crate::models::game::board::{Board, BoardMove};
 struct TreeNode {
     parent: Option<Rc<Self>>,
     board_move: Option<BoardMove>,
-    board: Board,
+    board: Option<Board>,
 }
 
 impl TreeNode {
-    pub fn new(parent: Option<Rc<Self>>, board_move: Option<BoardMove>, board: Board) -> Self {
+    pub fn new(
+        parent: Option<Rc<Self>>,
+        board_move: Option<BoardMove>,
+        board: Option<Board>,
+    ) -> Self {
         Self {
             parent,
             board_move,
@@ -24,8 +28,8 @@ impl TreeNode {
         self.board_move.as_ref()
     }
 
-    pub fn board(&self) -> &Board {
-        &self.board
+    pub fn board(&self) -> Option<&Board> {
+        self.board.as_ref()
     }
 
     pub fn parent(&self) -> Option<Rc<Self>> {
@@ -77,7 +81,7 @@ impl Solver {
                 children.push(TreeNode::new(
                     Some(Rc::clone(parent_node)),
                     Some(curr_move),
-                    board.clone(),
+                    Some(board.clone()),
                 ));
             }
         }
@@ -85,8 +89,30 @@ impl Solver {
         children
     }
 
+    fn upsert_hash(&mut self, board_hash: String) -> bool {
+        if self.seen.contains(&board_hash) {
+            return false;
+        }
+
+        self.seen.insert(board_hash);
+
+        true
+    }
+
+    fn update_board_with_move(
+        &self,
+        board: &mut Board,
+        move_: &BoardMove,
+    ) -> Result<(), BoardError> {
+        board.move_block(
+            move_.block_idx(),
+            move_.move_().row_diff(),
+            move_.move_().col_diff(),
+        )
+    }
+
     fn bfs(&mut self, root: Rc<TreeNode>) -> Option<Rc<TreeNode>> {
-        self.seen.insert(root.board().hash());
+        self.seen.insert(root.board().unwrap().hash());
 
         let mut queue = VecDeque::from([root]);
 
@@ -96,34 +122,23 @@ impl Solver {
             for _ in 0..queue_size {
                 let node = queue.pop_front().unwrap();
 
-                let mut curr_board = node.board().clone();
+                let mut board = node.board().take().unwrap().to_owned();
 
-                if let Some(curr_move) = node.board_move() {
-                    if curr_board
-                        .move_block(
-                            curr_move.block_idx(),
-                            curr_move.move_().row_diff(),
-                            curr_move.move_().col_diff(),
-                        )
-                        .is_err()
-                    {
+                if let Some(move_) = node.board_move() {
+                    if self.update_board_with_move(&mut board, move_).is_err() {
                         continue;
                     };
 
-                    let board_hash = curr_board.hash();
-
-                    if self.seen.contains(&board_hash) {
+                    if !self.upsert_hash(board.hash()) {
                         continue;
                     }
 
-                    self.seen.insert(board_hash);
-
-                    if curr_board.is_solved() {
+                    if board.is_solved() {
                         return Some(node.clone());
                     }
                 }
 
-                for child in self.get_moves(&curr_board, &node) {
+                for child in self.get_moves(&board, &node) {
                     queue.push_back(Rc::new(child));
                 }
             }
@@ -150,7 +165,7 @@ impl Solver {
     }
 
     pub fn solve(&mut self) -> Option<Vec<BoardMove>> {
-        let root = TreeNode::new(None, None, self.start_board.clone());
+        let root = TreeNode::new(None, None, Some(self.start_board.clone()));
 
         if let Some(leaf) = self.bfs(Rc::new(root)) {
             return Some(leaf.collect());
