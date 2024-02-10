@@ -95,6 +95,76 @@ impl Move {
     }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlatMove {
+    row_diff: i8,
+    col_diff: i8,
+}
+
+impl FlatMove {
+    pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
+        if row_diff.abs() + col_diff.abs() > Board::NUM_EMPTY_CELLS as i8 {
+            return None;
+        }
+
+        Some(Self { row_diff, col_diff })
+    }
+
+    pub fn from_steps(steps: &[Step]) -> Self {
+        Self {
+            row_diff: steps.iter().fold(0, |acc, step| acc + step.row_diff()),
+            col_diff: steps.iter().fold(0, |acc, step| acc + step.col_diff()),
+        }
+    }
+
+    pub fn row_diff(&self) -> i8 {
+        self.row_diff
+    }
+
+    pub fn col_diff(&self) -> i8 {
+        self.col_diff
+    }
+
+    pub fn is_opposite(&self, other: &Self) -> bool {
+        self.row_diff == -other.row_diff() && self.col_diff == -other.col_diff()
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct FlatBoardMove {
+    block_idx: usize,
+    row_diff: i8,
+    col_diff: i8,
+}
+
+impl FlatBoardMove {
+    pub fn new(block_idx: usize, move_: FlatMove) -> Self {
+        Self {
+            block_idx,
+            row_diff: move_.row_diff(),
+            col_diff: move_.col_diff(),
+        }
+    }
+
+    pub fn block_idx(&self) -> usize {
+        self.block_idx
+    }
+
+    pub fn row_diff(&self) -> i8 {
+        self.row_diff
+    }
+
+    pub fn col_diff(&self) -> i8 {
+        self.col_diff
+    }
+
+    pub fn is_opposite(&self, other: &Self) -> bool {
+        self.block_idx == other.block_idx()
+            && self.row_diff == -other.row_diff()
+            && self.col_diff == -other.col_diff()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,5 +195,20 @@ mod tests {
 
         assert_eq!(move_one.opposite(), move_two);
         assert_ne!(move_one.opposite(), move_three);
+    }
+
+    #[test]
+    fn flat_move() {
+        let flat_move_one = FlatMove::from_steps(&[Step::Up, Step::Left]);
+
+        assert_eq!(flat_move_one.row_diff, -1);
+        assert_eq!(flat_move_one.col_diff, -1);
+
+        let flat_move_two = FlatMove::from_steps(&[Step::Left, Step::Up]);
+
+        assert_eq!(flat_move_two.row_diff, -1);
+        assert_eq!(flat_move_two.col_diff, -1);
+
+        assert_eq!(flat_move_one, flat_move_two);
     }
 }

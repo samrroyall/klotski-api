@@ -1,6 +1,6 @@
 use super::{
     block::PositionedBlock,
-    move_::{Move, Step},
+    move_::{FlatMove, Move, Step},
 };
 use crate::{errors::game::BoardError, models::game::utils::Position};
 
@@ -94,7 +94,7 @@ impl Board {
         }
     }
 
-    fn get_next_moves_for_block(&self, block: &PositionedBlock) -> Vec<Vec<Step>> {
+    fn get_next_moves_for_block(&self, block: &PositionedBlock) -> Vec<FlatMove> {
         let mut moves = vec![vec![]];
 
         let mut block = block.clone();
@@ -128,6 +128,9 @@ impl Board {
         }
 
         moves
+            .into_iter()
+            .map(|move_| FlatMove::from_steps(&move_))
+            .collect()
     }
 }
 
@@ -259,6 +262,34 @@ impl Board {
         Ok(())
     }
 
+    pub fn move_block_optimistic(
+        &mut self,
+        block_idx: usize,
+        row_diff: i8,
+        col_diff: i8,
+    ) -> Result<(), BoardError> {
+        let block = self
+            .blocks
+            .get(block_idx)
+            .cloned()
+            .ok_or(BoardError::BlockIndexOutOfBounds)?;
+
+        self.updated_filled_range(block.range(), false);
+
+        let new_block = PositionedBlock::new(
+            block.block_id(),
+            (block.min_position().row() as i8 + row_diff) as u8,
+            (block.min_position().col() as i8 + col_diff) as u8,
+        )
+        .ok_or(BoardError::BlockPlacementInvalid)?;
+
+        self.updated_filled_range(new_block.range(), true);
+
+        self.blocks[block_idx] = new_block;
+
+        Ok(())
+    }
+
     pub fn move_block(&mut self, block_idx: usize, move_: &[Step]) -> Result<(), BoardError> {
         let mut block = self
             .blocks
@@ -292,10 +323,16 @@ impl Board {
         Ok(())
     }
 
-    pub fn get_next_moves(&self) -> Vec<Vec<Vec<Step>>> {
+    pub fn get_next_moves(&self) -> Vec<Vec<FlatMove>> {
         self.blocks
             .iter()
-            .map(|block| self.get_next_moves_for_block(block))
+            .map(|block| {
+                let mut moves = self.get_next_moves_for_block(block);
+
+                moves.dedup();
+
+                moves
+            })
             .collect()
     }
 }
@@ -393,15 +430,13 @@ mod tests {
             ]
         );
 
-        println!("{:?}", block_two_moves);
-
         let expected_block_two_moves = [
-            vec![Step::Right],
-            vec![Step::Right, Step::Right],
-            vec![Step::Right, Step::Down],
-            vec![Step::Down],
-            vec![Step::Down, Step::Down],
-            vec![Step::Down, Step::Right],
+            FlatMove::new(0, 1).unwrap(),
+            FlatMove::new(0, 2).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+            FlatMove::new(1, 0).unwrap(),
+            FlatMove::new(2, 0).unwrap(),
         ];
 
         assert_eq!(block_two_moves.len(), expected_block_two_moves.len());
@@ -442,12 +477,12 @@ mod tests {
         );
 
         let expected_block_two_moves = [
-            vec![Step::Left],
-            vec![Step::Left, Step::Left],
-            vec![Step::Left, Step::Up],
-            vec![Step::Up, Step::Left],
-            vec![Step::Up],
-            vec![Step::Up, Step::Up],
+            FlatMove::new(0, -1).unwrap(),
+            FlatMove::new(0, -2).unwrap(),
+            FlatMove::new(-1, -1).unwrap(),
+            FlatMove::new(-1, -1).unwrap(),
+            FlatMove::new(-1, 0).unwrap(),
+            FlatMove::new(-2, 0).unwrap(),
         ];
 
         assert_eq!(block_two_moves.len(), expected_block_two_moves.len());
@@ -455,6 +490,29 @@ mod tests {
         for move_ in block_two_moves {
             assert!(expected_block_two_moves.contains(&move_));
         }
+    }
+
+    #[test]
+    fn hash() {
+        let mut board = Board::default();
+        let blocks = [
+            PositionedBlock::new(3, 0, 0).unwrap(),
+            PositionedBlock::new(3, 0, 3).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 1).unwrap(),
+            PositionedBlock::new(3, 2, 3).unwrap(),
+            PositionedBlock::new(2, 3, 1).unwrap(),
+            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(1, 4, 3).unwrap(),
+        ];
+
+        for block in blocks.iter() {
+            board.updated_filled_range(block.range(), true);
+            board.blocks.push(block.clone());
+        }
+
+        assert_eq!(board.hash(), String::from("34433443322332231001"),);
     }
 
     #[test]
@@ -557,6 +615,56 @@ mod tests {
             ]
         );
         assert!(board.change_block(1, 1).is_err());
+    }
+
+    #[test]
+    fn move_block_optimistic() {
+        let mut board = Board::default();
+
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        board.updated_filled_range(block_one.range(), true);
+        board.blocks.push(block_one);
+
+        let block_two = PositionedBlock::new(1, 0, 1).unwrap();
+        board.updated_filled_range(block_two.range(), true);
+        board.blocks.push(block_two);
+
+        assert!(board.move_block_optimistic(0, 1, 0).is_ok());
+        assert_eq!(
+            board.filled,
+            [
+                [false, true, false, false],
+                [true, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.move_block_optimistic(0, 0, 1).is_ok());
+        assert_eq!(
+            board.filled,
+            [
+                [false, true, false, false],
+                [false, true, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
+
+        assert!(board.move_block_optimistic(0, -1, 0).is_ok());
+
+        assert_eq!(
+            board.filled,
+            [
+                [false, true, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+                [false, false, false, false],
+            ]
+        );
     }
 
     #[test]
@@ -702,10 +810,10 @@ mod tests {
         ];
 
         let expected_moves = [
-            vec![vec![Step::Down], vec![Step::Down, Step::Right]],
-            vec![vec![Step::Down], vec![Step::Down, Step::Left]],
-            vec![vec![Step::Right], vec![Step::Right, Step::Right]],
-            vec![vec![Step::Left], vec![Step::Left, Step::Left]],
+            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, 1).unwrap()],
+            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, -1).unwrap()],
+            vec![FlatMove::new(0, 1).unwrap(), FlatMove::new(0, 2).unwrap()],
+            vec![FlatMove::new(0, -1).unwrap(), FlatMove::new(0, -2).unwrap()],
         ];
 
         let mut board = Board::default();

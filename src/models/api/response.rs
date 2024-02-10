@@ -2,7 +2,7 @@ use serde::Serialize;
 
 use crate::models::{
     db::tables::BoardState,
-    game::move_::{Move, Step},
+    game::move_::{FlatBoardMove, FlatMove},
 };
 
 #[derive(Debug, Serialize)]
@@ -31,7 +31,7 @@ pub struct SolvingResponse {
 }
 
 impl SolvingResponse {
-    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<Vec<Step>>>) -> Self {
+    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
         Self {
             id: board_state.id.clone(),
             blocks: board_state.blocks.clone(),
@@ -47,7 +47,7 @@ pub struct SolvedResponse {
 }
 
 impl SolvedResponse {
-    pub fn new(moves: &Vec<Move>) -> Self {
+    pub fn new(moves: &Vec<FlatBoardMove>) -> Self {
         Self {
             moves: serde_json::to_string(moves).unwrap(),
         }

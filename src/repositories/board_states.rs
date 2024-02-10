@@ -3,10 +3,8 @@ use uuid::Uuid;
 
 use crate::errors::game::BoardError;
 use crate::models::db::schema::board_states::dsl::*;
-use crate::models::{
-    db::tables::BoardState,
-    game::{board::Board, move_::Step},
-};
+use crate::models::game::move_::FlatMove;
+use crate::models::{db::tables::BoardState, game::board::Board};
 use crate::services::db::DbPool;
 
 #[derive(Debug)]
@@ -119,7 +117,7 @@ where
     Ok(new_board_state)
 }
 
-type NextMoves = Vec<Vec<Vec<Step>>>;
+type NextMoves = Vec<Vec<FlatMove>>;
 
 pub fn update_board_state_solving<F>(
     search_id: &String,
