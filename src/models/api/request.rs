@@ -1,8 +1,16 @@
 use serde::Deserialize;
 
-#[derive(Deserialize)]
-pub struct BoardQueryParams {
-    pub id: String,
+use crate::models::game::move_::Step;
+
+#[derive(Debug, Deserialize)]
+pub struct BoardParams {
+    pub board_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct BlockParams {
+    pub board_id: String,
+    pub block_idx: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -19,8 +27,7 @@ pub struct ChangeBlockRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct MoveBlockRequest {
-    pub row_diff: i8,
-    pub col_diff: i8,
+    pub steps: Vec<Step>,
 }
 
 #[derive(Debug, Deserialize)]

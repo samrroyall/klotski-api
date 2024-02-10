@@ -31,7 +31,7 @@ impl BoardState {
         Board::new(
             serde_json::from_str(&self.blocks).unwrap(),
             serde_json::from_str(&self.moves).unwrap(),
-            &serde_json::from_str(&self.filled).unwrap(),
+            serde_json::from_str(&self.filled).unwrap(),
         )
     }
 }

@@ -1,8 +1,11 @@
 use serde::Serialize;
 
-use crate::models::{db::tables::BoardState, game::move_::Move};
+use crate::models::{
+    db::tables::BoardState,
+    game::move_::{FlatBoardMove, FlatMove},
+};
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct BuildingResponse {
     id: String,
     blocks: String,
@@ -19,7 +22,7 @@ impl BuildingResponse {
     }
 }
 
-#[derive(Serialize)]
+#[derive(Debug, Serialize)]
 pub struct SolvingResponse {
     id: String,
     blocks: String,
@@ -28,7 +31,7 @@ pub struct SolvingResponse {
 }
 
 impl SolvingResponse {
-    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<Move>>) -> Self {
+    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
         Self {
             id: board_state.id.clone(),
             blocks: board_state.blocks.clone(),
@@ -36,4 +39,24 @@ impl SolvingResponse {
             is_solved: board_state.is_solved,
         }
     }
+}
+
+#[derive(Debug, Serialize)]
+pub struct SolvedResponse {
+    moves: String,
+}
+
+impl SolvedResponse {
+    pub fn new(moves: &Vec<FlatBoardMove>) -> Self {
+        Self {
+            moves: serde_json::to_string(moves).unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum SolveResponse {
+    Solved(SolvedResponse),
+    UnableToSolve,
 }
