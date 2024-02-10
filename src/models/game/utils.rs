@@ -3,27 +3,6 @@ use serde::{Deserialize, Serialize};
 use super::board::Board;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-pub struct Dimensions {
-    rows: u8,
-    cols: u8,
-}
-
-impl Dimensions {
-    pub const ONE_BY_ONE: Self = Self { rows: 1, cols: 1 };
-    pub const ONE_BY_TWO: Self = Self { rows: 1, cols: 2 };
-    pub const TWO_BY_ONE: Self = Self { rows: 2, cols: 1 };
-    pub const TWO_BY_TWO: Self = Self { rows: 2, cols: 2 };
-
-    pub fn rows(&self) -> u8 {
-        self.rows
-    }
-
-    pub fn cols(&self) -> u8 {
-        self.cols
-    }
-}
-
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Position {
     row: usize,
     col: usize,

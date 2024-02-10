@@ -2,49 +2,43 @@ use serde::{Deserialize, Serialize};
 
 use crate::errors::game::BoardError;
 
-use super::{
-    move_::Move,
-    utils::{Dimensions, Position},
-};
+use super::{move_::Step, utils::Position};
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
-struct Block {
-    id: u8,
-    dimensions: Dimensions,
+enum Block {
+    OneByOne,
+    OneByTwo,
+    TwoByOne,
+    TwoByTwo,
 }
 
 impl Block {
-    pub const VALID_IDS: [u8; 4] = [1, 2, 3, 4];
-
-    const ONE_BY_ONE: Self = Self {
-        id: 1,
-        dimensions: Dimensions::ONE_BY_ONE,
-    };
-    const ONE_BY_TWO: Self = Self {
-        id: 2,
-        dimensions: Dimensions::ONE_BY_TWO,
-    };
-    const TWO_BY_ONE: Self = Self {
-        id: 3,
-        dimensions: Dimensions::TWO_BY_ONE,
-    };
-    const TWO_BY_TWO: Self = Self {
-        id: 4,
-        dimensions: Dimensions::TWO_BY_TWO,
-    };
-
     pub fn from_id(id: u8) -> Option<Self> {
         match id {
-            1 => Some(Self::ONE_BY_ONE),
-            2 => Some(Self::ONE_BY_TWO),
-            3 => Some(Self::TWO_BY_ONE),
-            4 => Some(Self::TWO_BY_TWO),
+            1 => Some(Self::OneByOne),
+            2 => Some(Self::OneByTwo),
+            3 => Some(Self::TwoByOne),
+            4 => Some(Self::TwoByTwo),
             _ => None,
         }
     }
 
-    pub fn dimensions(&self) -> Dimensions {
-        self.dimensions.clone()
+    pub fn rows(&self) -> u8 {
+        match self {
+            Self::OneByOne => 1,
+            Self::OneByTwo => 1,
+            Self::TwoByOne => 2,
+            Self::TwoByTwo => 2,
+        }
+    }
+
+    pub fn cols(&self) -> u8 {
+        match self {
+            Self::OneByOne => 1,
+            Self::OneByTwo => 2,
+            Self::TwoByOne => 1,
+            Self::TwoByTwo => 2,
+        }
     }
 }
 
@@ -57,34 +51,26 @@ pub struct PositionedBlock {
 
 impl PositionedBlock {
     pub fn new(block_id: u8, min_row: u8, min_col: u8) -> Option<Self> {
-        if !Block::VALID_IDS.contains(&block_id) {
-            return None;
-        }
+        let block = Block::from_id(block_id)?;
 
-        if let Some(min_position) = Position::new(min_row as i8, min_col as i8) {
-            let dimensions = Block::from_id(block_id).unwrap().dimensions();
+        let min_position = Position::new(min_row as i8, min_col as i8)?;
 
-            let max_row = (min_position.row() as u8 + dimensions.rows()) as i8 - 1;
-            let max_col = (min_position.col() as u8 + dimensions.cols()) as i8 - 1;
+        let max_position = Position::new(
+            (min_row + block.rows()) as i8 - 1,
+            (min_col + block.cols()) as i8 - 1,
+        )?;
 
-            if let Some(max_position) = Position::new(max_row, max_col) {
-                return Some(Self {
-                    block_id,
-                    min_position,
-                    max_position,
-                });
-            }
-        }
-
-        None
+        Some(Self {
+            block_id,
+            min_position,
+            max_position,
+        })
     }
 
-    pub fn from_positioned_block(other_positioned_block: &PositionedBlock) -> Option<Self> {
-        Self::new(
-            other_positioned_block.block_id(),
-            other_positioned_block.min_position().row() as u8,
-            other_positioned_block.min_position().col() as u8,
-        )
+    pub fn from_positioned_block(block: &PositionedBlock) -> Option<Self> {
+        let [min_row, min_col] = block.min_position().to_array();
+
+        Self::new(block.block_id(), min_row as u8, min_col as u8)
     }
 
     pub fn block_id(&self) -> u8 {
@@ -99,41 +85,38 @@ impl PositionedBlock {
         self.max_position.clone()
     }
 
-    pub fn make_move(&mut self, move_: &Move) -> Result<(), BoardError> {
-        let new_min_position = Position::new(
-            self.min_position.row() as i8 + move_.row_diff(),
-            self.min_position.col() as i8 + move_.col_diff(),
-        )
-        .ok_or(BoardError::BlockPlacementInvalid)?;
+    pub fn do_step(&mut self, step: &Step) -> Result<(), BoardError> {
+        let [row_diff, col_diff] = step.to_array();
 
-        let new_max_position = Position::new(
-            self.max_position.row() as i8 + move_.row_diff(),
-            self.max_position.col() as i8 + move_.col_diff(),
-        )
-        .ok_or(BoardError::BlockPlacementInvalid)?;
+        let [min_row, min_col] = self.min_position.to_array();
 
-        self.min_position = new_min_position;
-        self.max_position = new_max_position;
+        let [max_row, max_col] = self.max_position.to_array();
+
+        self.min_position = Position::new(min_row as i8 + row_diff, min_col as i8 + col_diff)
+            .ok_or(BoardError::BlockPlacementInvalid)?;
+        self.max_position = Position::new(max_row as i8 + row_diff, max_col as i8 + col_diff)
+            .ok_or(BoardError::BlockPlacementInvalid)?;
 
         Ok(())
     }
 
-    pub fn range(&self) -> (Position, Position) {
-        (self.min_position.clone(), self.max_position.clone())
+    pub fn range(&self) -> Vec<(usize, usize)> {
+        (self.min_position.row()..=self.max_position.row())
+            .flat_map(move |i| {
+                (self.min_position.col()..=self.max_position.col()).map(move |j| (i, j))
+            })
+            .collect()
     }
 
-    pub fn undo_move(&mut self, move_: &Move) -> Result<(), BoardError> {
-        let move_ = Move::new(-move_.row_diff(), -move_.col_diff())
-            .ok_or(BoardError::BlockPlacementInvalid)?;
-
-        self.make_move(&move_)
+    pub fn undo_step(&mut self, step: &Step) -> Result<(), BoardError> {
+        self.do_step(&step.opposite())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{board::Board, move_::Move};
+    use crate::models::game::{board::Board, move_::Step};
 
     #[test]
     fn valid_blocks() {
@@ -170,6 +153,7 @@ mod tests {
     fn positioned_block_max_position() {
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         let block_two = PositionedBlock::new(4, 0, 1).unwrap();
+
         assert!(
             block_one.max_position() == Position::new(0, 0).unwrap()
                 && block_two.max_position() == Position::new(1, 2).unwrap()
@@ -180,24 +164,31 @@ mod tests {
     fn positioned_block_from() {
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         let block_two = PositionedBlock::from_positioned_block(&block_one).unwrap();
+
         assert!(block_one == block_two);
     }
 
     #[test]
-    fn positioned_block_make_move() {
+    fn positioned_block_do_step() {
         let mut block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        let move_ = Move::new(1, 0).unwrap();
-        let res = block_one.make_move(&move_);
+        let res = block_one.do_step(&Step::Down);
+
+        assert!(res.is_ok());
+
         let block_two = PositionedBlock::new(1, 1, 0).unwrap();
-        assert!(res.is_ok() && block_one == block_two)
+
+        assert_eq!(block_one, block_two);
     }
 
     #[test]
-    fn positioned_block_undo_move() {
+    fn positioned_block_undo_step() {
         let mut block_two = PositionedBlock::new(1, 0, 1).unwrap();
-        let move_ = Move::new(0, 1).unwrap();
-        let res = block_two.undo_move(&move_);
+        let res = block_two.undo_step(&Step::Right);
+
+        assert!(res.is_ok());
+
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        assert!(res.is_ok() && block_one == block_two);
+
+        assert_eq!(block_one, block_two);
     }
 }

@@ -1,5 +1,7 @@
 use serde::Deserialize;
 
+use crate::models::game::move_::Step;
+
 #[derive(Debug, Deserialize)]
 pub struct BoardParams {
     pub board_id: String,
@@ -25,8 +27,7 @@ pub struct ChangeBlockRequest {
 
 #[derive(Debug, Deserialize)]
 pub struct MoveBlockRequest {
-    pub row_diff: i8,
-    pub col_diff: i8,
+    pub steps: Vec<Step>,
 }
 
 #[derive(Debug, Deserialize)]

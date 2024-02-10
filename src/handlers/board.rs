@@ -11,7 +11,7 @@ use crate::errors::game::BoardError;
 use crate::models::{
     api::request::*,
     api::response::*,
-    game::{block::PositionedBlock, board::Board},
+    game::{block::PositionedBlock, board::Board, move_::Step},
 };
 use crate::repositories::board_states::*;
 use crate::services::{db::DbPool, solver::Solver};
@@ -114,18 +114,13 @@ fn change_block(board_id: &String, pool: DbPool, block_idx: usize, new_block_id:
     update_board_while_building(board_id, update_fn, pool)
 }
 
-fn move_block(
-    board_id: &String,
-    pool: DbPool,
-    block_idx: usize,
-    row_diff: i8,
-    col_diff: i8,
-) -> Response {
+fn move_block(board_id: &String, pool: DbPool, block_idx: usize, move_: Vec<Step>) -> Response {
     let update_fn = |board: &mut Board| {
         if !board.is_ready_to_solve() {
             return Err(BoardError::BoardNotReady);
         }
-        board.move_block(block_idx, row_diff, col_diff)
+
+        board.move_block(block_idx, &move_)
     };
 
     update_board_while_solving(board_id, update_fn, pool)
@@ -156,13 +151,9 @@ pub async fn alter_block(
         AlterBlockRequest::ChangeBlock(change_block_data) => {
             change_block(&board_id, pool, block_idx, change_block_data.new_block_id)
         }
-        AlterBlockRequest::MoveBlock(move_block_data) => move_block(
-            &board_id,
-            pool,
-            block_idx,
-            move_block_data.row_diff,
-            move_block_data.col_diff,
-        ),
+        AlterBlockRequest::MoveBlock(move_block_data) => {
+            move_block(&board_id, pool, block_idx, move_block_data.steps)
+        }
     }
 }
 

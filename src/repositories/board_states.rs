@@ -5,7 +5,7 @@ use crate::errors::game::BoardError;
 use crate::models::db::schema::board_states::dsl::*;
 use crate::models::{
     db::tables::BoardState,
-    game::{board::Board, move_::Move},
+    game::{board::Board, move_::Step},
 };
 use crate::services::db::DbPool;
 
@@ -119,11 +119,13 @@ where
     Ok(new_board_state)
 }
 
+type NextMoves = Vec<Vec<Vec<Step>>>;
+
 pub fn update_board_state_solving<F>(
     search_id: &String,
     update_fn: F,
     pool: DbPool,
-) -> Result<(BoardState, Vec<Vec<Move>>), BoardStateRepositoryError>
+) -> Result<(BoardState, NextMoves), BoardStateRepositoryError>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {

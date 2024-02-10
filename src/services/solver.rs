@@ -2,30 +2,26 @@ use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 use crate::errors::game::BoardError;
-use crate::models::game::board::{Board, BoardMove};
+use crate::models::game::{board::Board, move_::Move};
 
 #[derive(Debug, Clone)]
 struct TreeNode {
     parent: Option<Rc<Self>>,
-    board_move: Option<BoardMove>,
+    move_: Option<Move>,
     board: Option<Board>,
 }
 
 impl TreeNode {
-    pub fn new(
-        parent: Option<Rc<Self>>,
-        board_move: Option<BoardMove>,
-        board: Option<Board>,
-    ) -> Self {
+    pub fn new(parent: Option<Rc<Self>>, move_: Option<Move>, board: Option<Board>) -> Self {
         Self {
             parent,
-            board_move,
+            move_,
             board,
         }
     }
 
-    pub fn board_move(&self) -> Option<&BoardMove> {
-        self.board_move.as_ref()
+    pub fn board_move(&self) -> Option<&Move> {
+        self.move_.as_ref()
     }
 
     pub fn board(&self) -> Option<&Board> {
@@ -33,14 +29,10 @@ impl TreeNode {
     }
 
     pub fn parent(&self) -> Option<Rc<Self>> {
-        if let Some(tree_node) = self.parent.as_ref() {
-            return Some(Rc::clone(tree_node));
-        }
-
-        None
+        self.parent.as_ref().map(Rc::clone)
     }
 
-    pub fn collect(&self) -> Vec<BoardMove> {
+    pub fn collect(&self) -> Vec<Move> {
         let mut moves = vec![];
 
         let mut curr_node = Some(Rc::new(self.clone()));
@@ -48,7 +40,9 @@ impl TreeNode {
         while let Some(node) = curr_node.as_ref() {
             if let Some(board_move) = node.board_move() {
                 moves.push(board_move.clone());
+
                 curr_node = node.parent();
+
                 continue;
             }
 
@@ -68,23 +62,27 @@ impl Solver {
     fn get_moves(&self, board: &Board, parent_node: &Rc<TreeNode>) -> Vec<TreeNode> {
         let mut children = vec![];
 
-        for (block_idx, moves) in board.get_next_moves().into_iter().enumerate() {
-            for move_ in moves.into_iter() {
-                let curr_move = BoardMove::new(block_idx, move_);
+        board
+            .get_next_moves()
+            .into_iter()
+            .enumerate()
+            .for_each(|(block_idx, moves)| {
+                for move_ in moves {
+                    let curr_move = Move::new(block_idx, move_).unwrap();
 
-                if let Some(board_move) = parent_node.board_move() {
-                    if board_move.is_opposite(&curr_move) {
-                        continue;
+                    if let Some(parent_move) = parent_node.board_move() {
+                        if curr_move.is_opposite(parent_move) {
+                            continue;
+                        }
                     }
-                }
 
-                children.push(TreeNode::new(
-                    Some(Rc::clone(parent_node)),
-                    Some(curr_move),
-                    Some(board.clone()),
-                ));
-            }
-        }
+                    children.push(TreeNode::new(
+                        Some(Rc::clone(parent_node)),
+                        Some(curr_move),
+                        Some(board.clone()),
+                    ));
+                }
+            });
 
         children
     }
@@ -99,16 +97,8 @@ impl Solver {
         true
     }
 
-    fn update_board_with_move(
-        &self,
-        board: &mut Board,
-        move_: &BoardMove,
-    ) -> Result<(), BoardError> {
-        board.move_block(
-            move_.block_idx(),
-            move_.move_().row_diff(),
-            move_.move_().col_diff(),
-        )
+    fn update_board_with_move(&self, board: &mut Board, move_: &Move) -> Result<(), BoardError> {
+        board.move_block(move_.block_idx(), move_.steps())
     }
 
     fn bfs(&mut self, root: Rc<TreeNode>) -> Option<Rc<TreeNode>> {
@@ -138,9 +128,9 @@ impl Solver {
                     }
                 }
 
-                for child in self.get_moves(&board, &node) {
-                    queue.push_back(Rc::new(child));
-                }
+                self.get_moves(&board, &node)
+                    .into_iter()
+                    .for_each(|child| queue.push_back(Rc::new(child)));
             }
         }
 
@@ -164,14 +154,10 @@ impl Solver {
         })
     }
 
-    pub fn solve(&mut self) -> Option<Vec<BoardMove>> {
+    pub fn solve(&mut self) -> Option<Vec<Move>> {
         let root = TreeNode::new(None, None, Some(self.start_board.clone()));
 
-        if let Some(leaf) = self.bfs(Rc::new(root)) {
-            return Some(leaf.collect());
-        }
-
-        None
+        self.bfs(Rc::new(root)).map(|leaf| leaf.collect())
     }
 }
 
