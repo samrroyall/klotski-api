@@ -102,12 +102,8 @@ impl Solver {
 
         let mut queue = VecDeque::from([root]);
 
-        let mut depth = 0;
-
         while !queue.is_empty() {
             let queue_size = queue.len();
-
-            println!("Depth: {}, Queue size: {}", depth, queue_size);
 
             for _ in 0..queue_size {
                 let node = queue.pop_front().unwrap();
@@ -134,8 +130,6 @@ impl Solver {
                     queue.push_back(Rc::new(child));
                 }
             }
-
-            depth += 1;
         }
 
         None
