@@ -171,11 +171,25 @@ mod tests {
         assert!(Solver::new(board).is_err());
     }
 
-    #[test]
-    fn test_classic_board() {
+    fn test_board(blocks: &[PositionedBlock], expected_moves: usize) {
         let mut board = Board::default();
 
-        let blocks = vec![
+        for block in blocks.iter() {
+            board.add_block(block.clone()).unwrap();
+        }
+
+        let mut solver = Solver::new(board).unwrap();
+
+        let maybe_moves = solver.solve();
+
+        assert!(maybe_moves.is_some());
+
+        assert_eq!(maybe_moves.unwrap().len(), expected_moves);
+    }
+
+    #[test]
+    fn test_classic_board() {
+        let blocks = [
             PositionedBlock::new(3, 0, 0).unwrap(),
             PositionedBlock::new(4, 0, 1).unwrap(),
             PositionedBlock::new(3, 0, 3).unwrap(),
@@ -188,22 +202,63 @@ mod tests {
             PositionedBlock::new(1, 4, 3).unwrap(),
         ];
 
-        for block in blocks.iter() {
-            board.add_block(block.clone()).unwrap();
-        }
+        test_board(&blocks, 81);
+    }
 
-        let maybe_solver = Solver::new(board);
+    #[test]
+    fn test_short_board() {
+        let blocks = [
+            PositionedBlock::new(1, 0, 0).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(1, 0, 3).unwrap(),
+            PositionedBlock::new(1, 1, 0).unwrap(),
+            PositionedBlock::new(1, 1, 3).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(1, 2, 1).unwrap(),
+            PositionedBlock::new(1, 2, 2).unwrap(),
+            PositionedBlock::new(3, 2, 3).unwrap(),
+            PositionedBlock::new(1, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 2).unwrap(),
+            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(1, 4, 3).unwrap(),
+        ];
 
-        assert!(maybe_solver.is_ok());
+        test_board(&blocks, 17);
+    }
 
-        let mut solver = maybe_solver.unwrap();
+    #[test]
+    fn test_medium_board() {
+        let blocks = [
+            PositionedBlock::new(1, 0, 0).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(1, 0, 3).unwrap(),
+            PositionedBlock::new(1, 1, 0).unwrap(),
+            PositionedBlock::new(1, 1, 3).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(3, 2, 1).unwrap(),
+            PositionedBlock::new(2, 2, 2).unwrap(),
+            PositionedBlock::new(2, 3, 2).unwrap(),
+            PositionedBlock::new(2, 4, 1).unwrap(),
+        ];
 
-        let maybe_moves = solver.solve();
+        test_board(&blocks, 40);
+    }
 
-        assert!(maybe_moves.is_some());
+    #[test]
+    fn test_hard_board() {
+        let blocks = [
+            PositionedBlock::new(1, 0, 0).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(1, 0, 3).unwrap(),
+            PositionedBlock::new(3, 1, 0).unwrap(),
+            PositionedBlock::new(3, 1, 3).unwrap(),
+            PositionedBlock::new(2, 2, 1).unwrap(),
+            PositionedBlock::new(1, 3, 0).unwrap(),
+            PositionedBlock::new(1, 3, 3).unwrap(),
+            PositionedBlock::new(2, 3, 1).unwrap(),
+            PositionedBlock::new(2, 4, 1).unwrap(),
+        ];
 
-        let moves = maybe_moves.unwrap();
-
-        assert_eq!(moves.len(), 81);
+        test_board(&blocks, 120);
     }
 }
