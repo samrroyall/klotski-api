@@ -1,8 +1,8 @@
 use super::{
-    block::PositionedBlock,
-    move_::{FlatMove, Move, Step},
+    blocks::Positioned as PositionedBlock,
+    moves::{FlatMove, Move, Step},
 };
-use crate::{errors::game::BoardError, models::game::utils::Position};
+use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
 #[derive(Debug, Clone)]
 pub struct Board {
@@ -27,9 +27,9 @@ impl Board {
     const WINNING_COL: usize = 1;
 
     fn updated_filled_range(&mut self, range: Vec<(usize, usize)>, value: bool) {
-        range
-            .into_iter()
-            .for_each(|(i, j)| self.filled[i][j] = value)
+        for (i, j) in range {
+            self.filled[i][j] = value;
+        }
     }
 
     fn is_range_empty(&self, range: Vec<(usize, usize)>) -> bool {
@@ -47,7 +47,7 @@ impl Board {
 
         self.updated_filled_range(block.range(), false);
 
-        for step in move_.iter() {
+        for step in move_ {
             if self.is_step_valid_for_block(block, step) && block.do_step(step).is_ok() {
                 step_stack.push(step);
             } else {
@@ -73,23 +73,19 @@ impl Board {
         match step {
             Step::Up => (min_position.col()..=max_position.col()).all(|col| {
                 Position::new(min_position.row() as i8 - 1, col as i8)
-                    .map(|new_position| !self.filled[new_position.row()][col])
-                    .unwrap_or(false)
+                    .is_some_and(|new_position| !self.filled[new_position.row()][col])
             }),
             Step::Down => (min_position.col()..=max_position.col()).all(|col| {
                 Position::new(max_position.row() as i8 + 1, col as i8)
-                    .map(|new_position| !self.filled[new_position.row()][col])
-                    .unwrap_or(false)
+                    .is_some_and(|new_position| !self.filled[new_position.row()][col])
             }),
             Step::Left => (min_position.row()..=max_position.row()).all(|row| {
                 Position::new(row as i8, min_position.col() as i8 - 1)
-                    .map(|new_position| !self.filled[row][new_position.col()])
-                    .unwrap_or(false)
+                    .is_some_and(|new_position| !self.filled[row][new_position.col()])
             }),
             Step::Right => (min_position.row()..=max_position.row()).all(|row| {
                 Position::new(row as i8, max_position.col() as i8 + 1)
-                    .map(|new_position| !self.filled[row][new_position.col()])
-                    .unwrap_or(false)
+                    .is_some_and(|new_position| !self.filled[row][new_position.col()])
             }),
         }
     }
@@ -101,11 +97,11 @@ impl Board {
 
         for depth in 0..Self::NUM_EMPTY_CELLS {
             for i in 0..moves.len() {
-                for step in moves[i].iter() {
+                for step in &moves[i] {
                     let _ = block.do_step(step);
                 }
 
-                for step in Step::ALL.iter() {
+                for step in &Step::ALL {
                     if self.is_step_valid_for_block(&block, step) && block.do_step(step).is_ok() {
                         let mut new_move = moves[i].clone();
 
@@ -160,16 +156,15 @@ impl Board {
     }
 
     pub fn hash(&self) -> String {
-        let mut board = [[0u8; Self::COLS]; Self::ROWS];
+        let mut block_id_matrix = [[0u8; Self::COLS]; Self::ROWS];
 
-        self.blocks.iter().for_each(|block| {
-            block
-                .range()
-                .into_iter()
-                .for_each(|(i, j)| board[i][j] = block.block_id())
-        });
+        for block in &self.blocks {
+            for (i, j) in block.range() {
+                block_id_matrix[i][j] = block.block_id();
+            }
+        }
 
-        board
+        block_id_matrix
             .into_iter()
             .map(|row| {
                 row.into_iter()
@@ -181,7 +176,7 @@ impl Board {
 
     pub fn is_ready_to_solve(&self) -> bool {
         let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
-            acc + (curr.block_id() == Self::WINNING_BLOCK_ID) as u8
+            acc + u8::from(curr.block_id() == Self::WINNING_BLOCK_ID)
         });
 
         if num_winning_blocks != 1 {
@@ -189,7 +184,9 @@ impl Board {
         }
 
         let empty_cells = self.filled.iter().fold(0, |acc, row| {
-            acc + row.iter().fold(0, |acc, &is_filled| acc + !is_filled as u8)
+            acc + row
+                .iter()
+                .fold(0, |acc, &is_filled| acc + u8::from(!is_filled))
         });
 
         empty_cells == Self::NUM_EMPTY_CELLS
@@ -242,8 +239,8 @@ impl Board {
 
         let new_block = PositionedBlock::new(
             new_block_id,
-            block.min_position().row() as u8,
-            block.min_position().col() as u8,
+            block.min_position().row(),
+            block.min_position().col(),
         )
         .ok_or(BoardError::BlockPlacementInvalid)?;
 
@@ -278,8 +275,8 @@ impl Board {
 
         let new_block = PositionedBlock::new(
             block.block_id(),
-            (block.min_position().row() as i8 + row_diff) as u8,
-            (block.min_position().col() as i8 + col_diff) as u8,
+            (block.min_position().row() as i8 + row_diff) as usize,
+            (block.min_position().col() as i8 + col_diff) as usize,
         )
         .ok_or(BoardError::BlockPlacementInvalid)?;
 

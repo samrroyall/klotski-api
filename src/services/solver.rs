@@ -1,8 +1,8 @@
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
-use crate::errors::game::BoardError;
-use crate::models::game::{board::Board, move_::FlatBoardMove};
+use crate::errors::board::Error as BoardError;
+use crate::models::game::{board::Board, moves::FlatBoardMove};
 
 #[derive(Debug, Clone)]
 struct TreeNode {
@@ -63,12 +63,12 @@ pub struct Solver {
 }
 
 impl Solver {
-    fn get_children(&self, board: &Board, parent_node: &Rc<TreeNode>) -> Vec<TreeNode> {
+    fn get_children(board: &Board, parent_node: &Rc<TreeNode>) -> Vec<TreeNode> {
         let mut children = vec![];
 
         for (block_idx, moves) in board.get_next_moves().into_iter().enumerate() {
             for move_ in moves {
-                let board_move = FlatBoardMove::new(block_idx, move_);
+                let board_move = FlatBoardMove::new(block_idx, &move_);
 
                 if let Some(parent_move) = parent_node.move_() {
                     if board_move.is_opposite(parent_move) {
@@ -126,7 +126,7 @@ impl Solver {
                     }
                 }
 
-                for child in self.get_children(&board, &node) {
+                for child in Self::get_children(&board, &node) {
                     queue.push_back(Rc::new(child));
                 }
             }
@@ -162,7 +162,7 @@ impl Solver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{block::PositionedBlock, board::Board};
+    use crate::models::game::{blocks::Positioned as PositionedBlock, board::Board};
 
     #[test]
     fn test_not_ready_board() {

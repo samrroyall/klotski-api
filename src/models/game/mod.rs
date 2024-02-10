@@ -1,4 +1,4 @@
-pub mod block;
+pub mod blocks;
 pub mod board;
-pub mod move_;
+pub mod moves;
 pub mod utils;

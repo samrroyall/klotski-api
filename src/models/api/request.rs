@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::models::game::move_::Step;
+use crate::models::game::moves::Step;
 
 #[derive(Debug, Deserialize)]
 pub struct BoardParams {
@@ -14,25 +14,25 @@ pub struct BlockParams {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct AddBlockRequest {
+pub struct AddBlock {
     pub block_id: u8,
-    pub min_row: u8,
-    pub min_col: u8,
+    pub min_row: usize,
+    pub min_col: usize,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct ChangeBlockRequest {
+pub struct ChangeBlock {
     pub new_block_id: u8,
 }
 
 #[derive(Debug, Deserialize)]
-pub struct MoveBlockRequest {
+pub struct MoveBlock {
     pub steps: Vec<Step>,
 }
 
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum AlterBlockRequest {
-    ChangeBlock(ChangeBlockRequest),
-    MoveBlock(MoveBlockRequest),
+pub enum AlterBlock {
+    ChangeBlock(ChangeBlock),
+    MoveBlock(MoveBlock),
 }

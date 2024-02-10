@@ -2,17 +2,17 @@ use serde::Serialize;
 
 use crate::models::{
     db::tables::BoardState,
-    game::move_::{FlatBoardMove, FlatMove},
+    game::moves::{FlatBoardMove, FlatMove},
 };
 
 #[derive(Debug, Serialize)]
-pub struct BuildingResponse {
+pub struct Building {
     id: String,
     blocks: String,
     ready_to_solve: bool,
 }
 
-impl BuildingResponse {
+impl Building {
     pub fn new(board_state: &BoardState) -> Self {
         Self {
             id: board_state.id.clone(),
@@ -23,14 +23,14 @@ impl BuildingResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct SolvingResponse {
+pub struct Solving {
     id: String,
     blocks: String,
     next_moves: String,
     is_solved: bool,
 }
 
-impl SolvingResponse {
+impl Solving {
     pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
         Self {
             id: board_state.id.clone(),
@@ -42,11 +42,11 @@ impl SolvingResponse {
 }
 
 #[derive(Debug, Serialize)]
-pub struct SolvedResponse {
+pub struct Solved {
     moves: String,
 }
 
-impl SolvedResponse {
+impl Solved {
     pub fn new(moves: &Vec<FlatBoardMove>) -> Self {
         Self {
             moves: serde_json::to_string(moves).unwrap(),
@@ -56,7 +56,7 @@ impl SolvedResponse {
 
 #[derive(Debug, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum SolveResponse {
-    Solved(SolvedResponse),
+pub enum Solve {
+    Solved(Solved),
     UnableToSolve,
 }

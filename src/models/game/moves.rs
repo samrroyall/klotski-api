@@ -17,17 +17,15 @@ impl Step {
         match self {
             Step::Up => -1,
             Step::Down => 1,
-            Step::Left => 0,
-            Step::Right => 0,
+            Step::Left | Step::Right => 0,
         }
     }
 
     pub fn col_diff(&self) -> i8 {
         match self {
-            Step::Up => 0,
-            Step::Down => 0,
             Step::Left => -1,
             Step::Right => 1,
+            Step::Up | Step::Down => 0,
         }
     }
 
@@ -85,11 +83,7 @@ impl Move {
     pub fn opposite(&self) -> Move {
         Move::new(
             self.block_idx,
-            self.steps
-                .iter()
-                .rev()
-                .map(|step| step.opposite())
-                .collect(),
+            self.steps.iter().rev().map(Step::opposite).collect(),
         )
         .unwrap()
     }
@@ -138,7 +132,7 @@ pub struct FlatBoardMove {
 }
 
 impl FlatBoardMove {
-    pub fn new(block_idx: usize, move_: FlatMove) -> Self {
+    pub fn new(block_idx: usize, move_: &FlatMove) -> Self {
         Self {
             block_idx,
             row_diff: move_.row_diff(),
