@@ -1,3 +1,5 @@
+#![warn(clippy::pedantic)]
+
 use axum::{
     routing::{delete, post, put},
     Extension, Router,
@@ -9,23 +11,26 @@ mod models;
 mod repositories;
 mod services;
 
-use crate::handlers::board::*;
+use crate::handlers::board as board_handlers;
 
 #[tokio::main]
 async fn main() {
     let db_pool = services::db::get_db_pool();
 
     let board_routes = Router::new()
-        .route("/", post(new_board))
-        .route("/:board_id", put(undo_move))
-        .route("/:board_id", delete(delete_board))
-        .route("/:board_id/block", post(add_block))
-        .route("/:board_id/block/:block_idx", put(alter_block))
+        .route("/", post(board_handlers::new))
+        .route("/:board_id", put(board_handlers::undo_move))
+        .route("/:board_id", delete(board_handlers::delete))
+        .route("/:board_id/block", post(board_handlers::add_block))
+        .route(
+            "/:board_id/block/:block_idx",
+            put(board_handlers::alter_block),
+        )
         .route(
             "/:board_id/block/:block_idx",
             delete(handlers::board::remove_block),
         )
-        .route("/:board_id/solve", post(solve_board));
+        .route("/:board_id/solve", post(board_handlers::solve));
 
     let api_routes = Router::new().nest("/board", board_routes);
 

@@ -17,22 +17,16 @@ impl Step {
         match self {
             Step::Up => -1,
             Step::Down => 1,
-            Step::Left => 0,
-            Step::Right => 0,
+            Step::Left | Step::Right => 0,
         }
     }
 
     pub fn col_diff(&self) -> i8 {
         match self {
-            Step::Up => 0,
-            Step::Down => 0,
             Step::Left => -1,
             Step::Right => 1,
+            Step::Up | Step::Down => 0,
         }
-    }
-
-    pub fn to_array(&self) -> [i8; 2] {
-        [self.row_diff(), self.col_diff()]
     }
 
     pub fn opposite(&self) -> Self {
@@ -47,33 +41,33 @@ impl Step {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Move {
-    block_idx: usize,
-    steps: Vec<Step>,
+    pub block_idx: usize,
+    pub steps: Vec<Step>,
 }
 
 impl Move {
     pub fn new(block_idx: usize, steps: Vec<Step>) -> Option<Self> {
         if !steps.is_empty() && steps.len() <= Board::NUM_EMPTY_CELLS as usize {
-            return Some(Self { block_idx, steps });
+            Some(Self { block_idx, steps })
+        } else {
+            None
         }
-
-        None
     }
 
-    pub fn block_idx(&self) -> usize {
-        self.block_idx
-    }
-
-    pub fn steps(&self) -> &Vec<Step> {
-        &self.steps
+    pub fn opposite(&self) -> Move {
+        Move::new(
+            self.block_idx,
+            self.steps.iter().rev().map(Step::opposite).collect(),
+        )
+        .unwrap()
     }
 
     pub fn is_opposite(&self, other: &Move) -> bool {
-        if self.block_idx != other.block_idx() || self.steps.len() != other.steps().len() {
+        if self.block_idx != other.block_idx || self.steps.len() != other.steps.len() {
             return false;
         }
 
-        for (step, other_step) in self.steps.iter().zip(other.steps().iter().rev()) {
+        for (step, other_step) in self.steps.iter().zip(other.steps.iter().rev()) {
             if other_step != &step.opposite() {
                 return false;
             }
@@ -81,29 +75,17 @@ impl Move {
 
         true
     }
-
-    pub fn opposite(&self) -> Move {
-        Move::new(
-            self.block_idx,
-            self.steps
-                .iter()
-                .rev()
-                .map(|step| step.opposite())
-                .collect(),
-        )
-        .unwrap()
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FlatMove {
-    row_diff: i8,
-    col_diff: i8,
+    pub row_diff: i8,
+    pub col_diff: i8,
 }
 
 impl FlatMove {
     pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
-        if row_diff.abs() + col_diff.abs() > Board::NUM_EMPTY_CELLS as i8 {
+        if row_diff.abs() + col_diff.abs() > i8::try_from(Board::NUM_EMPTY_CELLS).unwrap() {
             return None;
         }
 
@@ -117,51 +99,31 @@ impl FlatMove {
         }
     }
 
-    pub fn row_diff(&self) -> i8 {
-        self.row_diff
-    }
-
-    pub fn col_diff(&self) -> i8 {
-        self.col_diff
-    }
-
     pub fn is_opposite(&self, other: &Self) -> bool {
-        self.row_diff == -other.row_diff() && self.col_diff == -other.col_diff()
+        self.row_diff == -other.row_diff && self.col_diff == -other.col_diff
     }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 pub struct FlatBoardMove {
-    block_idx: usize,
-    row_diff: i8,
-    col_diff: i8,
+    pub block_idx: usize,
+    pub row_diff: i8,
+    pub col_diff: i8,
 }
 
 impl FlatBoardMove {
-    pub fn new(block_idx: usize, move_: FlatMove) -> Self {
+    pub fn new(block_idx: usize, move_: &FlatMove) -> Self {
         Self {
             block_idx,
-            row_diff: move_.row_diff(),
-            col_diff: move_.col_diff(),
+            row_diff: move_.row_diff,
+            col_diff: move_.col_diff,
         }
     }
 
-    pub fn block_idx(&self) -> usize {
-        self.block_idx
-    }
-
-    pub fn row_diff(&self) -> i8 {
-        self.row_diff
-    }
-
-    pub fn col_diff(&self) -> i8 {
-        self.col_diff
-    }
-
     pub fn is_opposite(&self, other: &Self) -> bool {
-        self.block_idx == other.block_idx()
-            && self.row_diff == -other.row_diff()
-            && self.col_diff == -other.col_diff()
+        self.block_idx == other.block_idx
+            && self.row_diff == -other.row_diff
+            && self.col_diff == -other.col_diff
     }
 }
 

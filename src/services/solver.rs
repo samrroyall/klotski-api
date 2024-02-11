@@ -1,8 +1,8 @@
 use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
-use crate::errors::game::BoardError;
-use crate::models::game::{board::Board, move_::FlatBoardMove};
+use crate::errors::board::Error as BoardError;
+use crate::models::game::{board::Board, moves::FlatBoardMove};
 
 #[derive(Debug, Clone)]
 struct TreeNode {
@@ -63,12 +63,12 @@ pub struct Solver {
 }
 
 impl Solver {
-    fn get_children(&self, board: &Board, parent_node: &Rc<TreeNode>) -> Vec<TreeNode> {
+    fn get_children(board: &Board, parent_node: &Rc<TreeNode>) -> Vec<TreeNode> {
         let mut children = vec![];
 
         for (block_idx, moves) in board.get_next_moves().into_iter().enumerate() {
             for move_ in moves {
-                let board_move = FlatBoardMove::new(block_idx, move_);
+                let board_move = FlatBoardMove::new(block_idx, &move_);
 
                 if let Some(parent_move) = parent_node.move_() {
                     if board_move.is_opposite(parent_move) {
@@ -111,11 +111,9 @@ impl Solver {
                 let mut board = node.board().take().unwrap().to_owned();
 
                 if let Some(move_) = node.move_() {
-                    let _ = board.move_block_optimistic(
-                        move_.block_idx(),
-                        move_.row_diff(),
-                        move_.col_diff(),
-                    );
+                    board
+                        .move_block_optimistic(move_.block_idx, move_.row_diff, move_.col_diff)
+                        .unwrap();
 
                     if !self.upsert_hash(board.hash()) {
                         continue;
@@ -126,7 +124,7 @@ impl Solver {
                     }
                 }
 
-                for child in self.get_children(&board, &node) {
+                for child in Self::get_children(&board, &node) {
                     queue.push_back(Rc::new(child));
                 }
             }
@@ -162,11 +160,34 @@ impl Solver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{block::PositionedBlock, board::Board};
+    use crate::models::game::{blocks::Positioned as PositionedBlock, board::Board};
 
     #[test]
     fn test_not_ready_board() {
         let board = Board::default();
+
+        assert!(Solver::new(board).is_err());
+    }
+
+    #[test]
+    fn test_solved_board() {
+        let mut board = Board::default();
+
+        let blocks = [
+            PositionedBlock::new(2, 0, 0).unwrap(),
+            PositionedBlock::new(2, 0, 2).unwrap(),
+            PositionedBlock::new(2, 1, 0).unwrap(),
+            PositionedBlock::new(2, 1, 2).unwrap(),
+            PositionedBlock::new(2, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 2).unwrap(),
+            PositionedBlock::new(1, 3, 0).unwrap(),
+            PositionedBlock::new(4, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 3).unwrap(),
+        ];
+
+        for block in blocks {
+            board.add_block(block).unwrap();
+        }
 
         assert!(Solver::new(board).is_err());
     }
@@ -206,7 +227,7 @@ mod tests {
     }
 
     #[test]
-    fn test_short_board() {
+    fn test_easy_board() {
         let blocks = [
             PositionedBlock::new(1, 0, 0).unwrap(),
             PositionedBlock::new(4, 0, 1).unwrap(),

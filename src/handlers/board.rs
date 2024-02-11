@@ -6,21 +6,33 @@ use axum::{
     Extension, Json as JsonResponse,
 };
 
-use super::utils::*;
-use crate::errors::game::BoardError;
-use crate::models::{
-    api::request::*,
-    api::response::*,
-    game::{block::PositionedBlock, board::Board, move_::Step},
+use super::utils::{
+    handle_board_error, handle_board_state_repository_error, handle_json_rejection,
+    handle_path_rejection,
 };
-use crate::repositories::board_states::*;
-use crate::services::{db::DbPool, solver::Solver};
+use crate::errors::board::Error as BoardError;
+use crate::models::{
+    api::request::{
+        AddBlock as AddBlockRequest, AlterBlock as AlterBlockRequest, BlockParams, BoardParams,
+    },
+    api::response::{
+        Building as BuildingResponse, Solve as SolveResponse, Solved as SolvedResponse,
+        Solving as SolvingResponse,
+    },
+    game::{blocks::Positioned as PositionedBlock, board::Board, moves::Step},
+};
+use crate::repositories::board_states::{
+    create as create_board_state, delete as delete_board_state, get as get_board_state,
+    update_while_building as update_board_state_while_building,
+    update_while_solving as update_board_state_while_solving,
+};
+use crate::services::{db::Pool as DbPool, solver::Solver};
 
-fn update_board_while_building<F>(board_id: &String, update_fn: F, pool: DbPool) -> Response
+fn make_building_update<F>(board_id: &String, update_fn: F, pool: &DbPool) -> Response
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
-    update_board_state_building(board_id, update_fn, pool)
+    update_board_state_while_building(board_id, update_fn, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -31,11 +43,11 @@ where
         .into_response()
 }
 
-fn update_board_while_solving<F>(board_id: &String, update_fn: F, pool: DbPool) -> Response
+fn make_solving_update<F>(board_id: &String, update_fn: F, pool: &DbPool) -> Response
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
-    update_board_state_solving(board_id, update_fn, pool)
+    update_board_state_while_solving(board_id, update_fn, pool)
         .map(|(board_state, next_moves)| {
             (
                 StatusCode::OK,
@@ -47,8 +59,8 @@ where
 }
 
 #[debug_handler]
-pub async fn new_board(Extension(pool): Extension<DbPool>) -> Response {
-    create_board_state(pool)
+pub async fn new(Extension(pool): Extension<DbPool>) -> Response {
+    create_board_state(&pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -60,7 +72,7 @@ pub async fn new_board(Extension(pool): Extension<DbPool>) -> Response {
 }
 
 #[debug_handler]
-pub async fn delete_board(
+pub async fn delete(
     Extension(pool): Extension<DbPool>,
     path_extraction: Option<Path<BoardParams>>,
 ) -> Response {
@@ -68,10 +80,10 @@ pub async fn delete_board(
         return handle_path_rejection().into_response();
     }
 
-    let BoardParams { board_id } = path_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
 
-    delete_board_state(&board_id, pool)
-        .map(|_| (StatusCode::OK, ()))
+    delete_board_state(&params.board_id, &pool)
+        .map(|()| (StatusCode::OK, ()))
         .map_err(handle_board_state_repository_error)
         .into_response()
 }
@@ -86,44 +98,39 @@ pub async fn add_block(
         return handle_path_rejection().into_response();
     }
 
-    let BoardParams { board_id } = path_extraction.unwrap().0;
-
     if json_extraction.is_none() {
         return handle_json_rejection().into_response();
     }
 
-    let AddBlockRequest {
-        block_id,
-        min_row,
-        min_col,
-    } = json_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
+    let body = json_extraction.unwrap().0;
 
     let update_fn = |board: &mut Board| {
-        if let Some(block) = PositionedBlock::new(block_id, min_row, min_col) {
+        if let Some(block) = PositionedBlock::new(body.block_id, body.min_row, body.min_col) {
             return board.add_block(block);
         }
         Err(BoardError::BlockInvalid)
     };
 
-    update_board_while_building(&board_id, update_fn, pool)
+    make_building_update(&params.board_id, update_fn, &pool)
 }
 
-fn change_block(board_id: &String, pool: DbPool, block_idx: usize, new_block_id: u8) -> Response {
+fn change_block(board_id: &String, pool: &DbPool, block_idx: usize, new_block_id: u8) -> Response {
     let update_fn = |board: &mut Board| board.change_block(block_idx, new_block_id);
 
-    update_board_while_building(board_id, update_fn, pool)
+    make_building_update(board_id, update_fn, pool)
 }
 
-fn move_block(board_id: &String, pool: DbPool, block_idx: usize, move_: Vec<Step>) -> Response {
+fn move_block(board_id: &String, pool: &DbPool, block_idx: usize, move_: &[Step]) -> Response {
     let update_fn = |board: &mut Board| {
         if !board.is_ready_to_solve() {
             return Err(BoardError::BoardNotReady);
         }
 
-        board.move_block(block_idx, &move_)
+        board.move_block(block_idx, move_)
     };
 
-    update_board_while_solving(board_id, update_fn, pool)
+    make_solving_update(board_id, update_fn, pool)
 }
 
 #[debug_handler]
@@ -136,24 +143,26 @@ pub async fn alter_block(
         return handle_path_rejection().into_response();
     }
 
-    let BlockParams {
-        board_id,
-        block_idx,
-    } = path_extraction.unwrap().0;
-
     if json_extraction.is_none() {
         return handle_json_rejection().into_response();
     }
 
-    let payload = json_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
+    let body = json_extraction.unwrap().0;
 
-    match payload {
-        AlterBlockRequest::ChangeBlock(change_block_data) => {
-            change_block(&board_id, pool, block_idx, change_block_data.new_block_id)
-        }
-        AlterBlockRequest::MoveBlock(move_block_data) => {
-            move_block(&board_id, pool, block_idx, move_block_data.steps)
-        }
+    match body {
+        AlterBlockRequest::ChangeBlock(change_block_data) => change_block(
+            &params.board_id,
+            &pool,
+            params.block_idx,
+            change_block_data.new_block_id,
+        ),
+        AlterBlockRequest::MoveBlock(move_block_data) => move_block(
+            &params.board_id,
+            &pool,
+            params.block_idx,
+            &move_block_data.steps,
+        ),
     }
 }
 
@@ -166,7 +175,7 @@ pub async fn undo_move(
         return handle_path_rejection().into_response();
     }
 
-    let BoardParams { board_id } = path_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
 
     let update_fn = |board: &mut Board| {
         if board.is_ready_to_solve() {
@@ -175,7 +184,7 @@ pub async fn undo_move(
         board.undo_move()
     };
 
-    update_board_while_solving(&board_id, update_fn, pool)
+    make_solving_update(&params.board_id, update_fn, &pool)
 }
 
 #[debug_handler]
@@ -187,18 +196,15 @@ pub async fn remove_block(
         return handle_path_rejection().into_response();
     }
 
-    let BlockParams {
-        board_id,
-        block_idx,
-    } = path_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
 
-    let update_fn = |board: &mut Board| board.remove_block(block_idx);
+    let update_fn = |board: &mut Board| board.remove_block(params.block_idx);
 
-    update_board_while_building(&board_id, update_fn, pool)
+    make_building_update(&params.board_id, update_fn, &pool)
 }
 
 #[debug_handler]
-pub async fn solve_board(
+pub async fn solve(
     Extension(pool): Extension<DbPool>,
     path_extraction: Option<Path<BoardParams>>,
 ) -> Response {
@@ -208,25 +214,17 @@ pub async fn solve_board(
 
     let BoardParams { board_id } = path_extraction.unwrap().0;
 
-    get_board_state(&board_id, pool)
-        .map(|board_state| {
-            let board = board_state.to_board();
-
-            Solver::new(board)
-                .map(|mut solver| {
-                    let maybe_solution = solver.solve();
-
-                    (
-                        StatusCode::OK,
-                        JsonResponse(if let Some(moves) = maybe_solution {
-                            SolveResponse::Solved(SolvedResponse::new(&moves))
-                        } else {
-                            SolveResponse::UnableToSolve
-                        }),
-                    )
-                })
-                .map_err(handle_board_error)
-        })
+    get_board_state(&board_id, &pool)
         .map_err(handle_board_state_repository_error)
+        .and_then(|board_state| Solver::new(board_state.to_board()).map_err(handle_board_error))
+        .map(|mut solver| {
+            (
+                StatusCode::OK,
+                JsonResponse(match solver.solve() {
+                    Some(moves) => SolveResponse::Solved(SolvedResponse::new(&moves)),
+                    None => SolveResponse::UnableToSolve,
+                }),
+            )
+        })
         .into_response()
 }
