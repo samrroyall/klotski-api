@@ -111,11 +111,9 @@ impl Solver {
                 let mut board = node.board().take().unwrap().to_owned();
 
                 if let Some(move_) = node.move_() {
-                    let _ = board.move_block_optimistic(
-                        move_.block_idx(),
-                        move_.row_diff(),
-                        move_.col_diff(),
-                    );
+                    board
+                        .move_block_optimistic(move_.block_idx, move_.row_diff, move_.col_diff)
+                        .unwrap();
 
                     if !self.upsert_hash(board.hash()) {
                         continue;
@@ -167,6 +165,29 @@ mod tests {
     #[test]
     fn test_not_ready_board() {
         let board = Board::default();
+
+        assert!(Solver::new(board).is_err());
+    }
+
+    #[test]
+    fn test_solved_board() {
+        let mut board = Board::default();
+
+        let blocks = [
+            PositionedBlock::new(2, 0, 0).unwrap(),
+            PositionedBlock::new(2, 0, 2).unwrap(),
+            PositionedBlock::new(2, 1, 0).unwrap(),
+            PositionedBlock::new(2, 1, 2).unwrap(),
+            PositionedBlock::new(2, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 2).unwrap(),
+            PositionedBlock::new(1, 3, 0).unwrap(),
+            PositionedBlock::new(4, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 3).unwrap(),
+        ];
+
+        for block in blocks {
+            board.add_block(block).unwrap();
+        }
 
         assert!(Solver::new(board).is_err());
     }

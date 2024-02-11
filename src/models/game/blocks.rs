@@ -40,20 +40,20 @@ impl Block {
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Positioned {
-    block_id: u8,
-    min_position: Position,
-    max_position: Position,
+    pub block_id: u8,
+    pub min_position: Position,
+    pub max_position: Position,
 }
 
 impl Positioned {
     pub fn new(block_id: u8, min_row: usize, min_col: usize) -> Option<Self> {
         let block = Block::from_id(block_id)?;
 
-        let min_position = Position::new(min_row as i8, min_col as i8)?;
+        let min_position = Position::new(min_row, min_col)?;
 
         let max_position = Position::new(
-            (min_row as u8 + block.rows() - 1) as i8,
-            (min_col as u8 + block.cols() - 1) as i8,
+            min_row + usize::from(block.rows() - 1),
+            min_col + usize::from(block.cols() - 1),
         )?;
 
         Some(Self {
@@ -63,45 +63,29 @@ impl Positioned {
         })
     }
 
-    pub fn from_positioned_block(other: &Positioned) -> Option<Self> {
-        let [min_row, min_col] = other.min_position().to_array();
-
-        Self::new(other.block_id(), min_row, min_col)
-    }
-
-    pub fn block_id(&self) -> u8 {
-        self.block_id
-    }
-
-    pub fn min_position(&self) -> Position {
-        self.min_position.clone()
-    }
-
-    pub fn max_position(&self) -> Position {
-        self.max_position.clone()
+    pub fn range(&self) -> Vec<(usize, usize)> {
+        (self.min_position.row..=self.max_position.row)
+            .flat_map(move |i| (self.min_position.col..=self.max_position.col).map(move |j| (i, j)))
+            .collect()
     }
 
     pub fn do_step(&mut self, step: &Step) -> Result<(), BoardError> {
-        let [row_diff, col_diff] = step.to_array();
+        let row_diff = step.row_diff();
+        let col_diff = step.col_diff();
 
-        let [min_row, min_col] = self.min_position.to_array();
+        let new_min_position = self
+            .min_position
+            .move_by(row_diff, col_diff)
+            .ok_or(BoardError::BlockIndexOutOfBounds)?;
+        let new_max_position = self
+            .max_position
+            .move_by(row_diff, col_diff)
+            .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        let [max_row, max_col] = self.max_position.to_array();
-
-        self.min_position = Position::new(min_row as i8 + row_diff, min_col as i8 + col_diff)
-            .ok_or(BoardError::BlockPlacementInvalid)?;
-        self.max_position = Position::new(max_row as i8 + row_diff, max_col as i8 + col_diff)
-            .ok_or(BoardError::BlockPlacementInvalid)?;
+        self.min_position = new_min_position;
+        self.max_position = new_max_position;
 
         Ok(())
-    }
-
-    pub fn range(&self) -> Vec<(usize, usize)> {
-        (self.min_position.row()..=self.max_position.row())
-            .flat_map(move |i| {
-                (self.min_position.col()..=self.max_position.col()).map(move |j| (i, j))
-            })
-            .collect()
     }
 
     pub fn undo_step(&mut self, step: &Step) -> Result<(), BoardError> {
@@ -151,17 +135,9 @@ mod tests {
         let block_two = Positioned::new(4, 0, 1).unwrap();
 
         assert!(
-            block_one.max_position() == Position::new(0, 0).unwrap()
-                && block_two.max_position() == Position::new(1, 2).unwrap()
+            block_one.max_position == Position::new(0, 0).unwrap()
+                && block_two.max_position == Position::new(1, 2).unwrap()
         );
-    }
-
-    #[test]
-    fn positioned_block_from() {
-        let block_one = Positioned::new(1, 0, 0).unwrap();
-        let block_two = Positioned::from_positioned_block(&block_one).unwrap();
-
-        assert!(block_one == block_two);
     }
 
     #[test]

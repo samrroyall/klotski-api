@@ -6,9 +6,9 @@ use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
 #[derive(Debug, Clone)]
 pub struct Board {
-    blocks: Vec<PositionedBlock>,
-    moves: Vec<Move>,
-    filled: [[bool; Self::COLS]; Self::ROWS],
+    pub blocks: Vec<PositionedBlock>,
+    pub moves: Vec<Move>,
+    pub filled: [[bool; Self::COLS]; Self::ROWS],
 }
 
 impl Default for Board {
@@ -52,7 +52,7 @@ impl Board {
                 step_stack.push(step);
             } else {
                 while let Some(step) = step_stack.pop() {
-                    let _ = block.undo_step(step);
+                    block.undo_step(step).unwrap();
                 }
 
                 self.updated_filled_range(block.range(), true);
@@ -67,25 +67,30 @@ impl Board {
     }
 
     fn is_step_valid_for_block(&self, block: &PositionedBlock, step: &Step) -> bool {
-        let min_position = block.min_position();
-        let max_position = block.max_position();
-
         match step {
-            Step::Up => (min_position.col()..=max_position.col()).all(|col| {
-                Position::new(min_position.row() as i8 - 1, col as i8)
-                    .is_some_and(|new_position| !self.filled[new_position.row()][col])
+            Step::Up => (block.min_position.col..=block.max_position.col).all(|col| {
+                usize::try_from(i8::try_from(block.min_position.row).unwrap() - 1)
+                    .ok()
+                    .is_some_and(|row_above| {
+                        Position::new(row_above, col)
+                            .is_some_and(|new_position| !self.filled[new_position.row][col])
+                    })
             }),
-            Step::Down => (min_position.col()..=max_position.col()).all(|col| {
-                Position::new(max_position.row() as i8 + 1, col as i8)
-                    .is_some_and(|new_position| !self.filled[new_position.row()][col])
+            Step::Down => (block.min_position.col..=block.max_position.col).all(|col| {
+                Position::new(block.max_position.row + 1, col)
+                    .is_some_and(|new_position| !self.filled[new_position.row][col])
             }),
-            Step::Left => (min_position.row()..=max_position.row()).all(|row| {
-                Position::new(row as i8, min_position.col() as i8 - 1)
-                    .is_some_and(|new_position| !self.filled[row][new_position.col()])
+            Step::Left => (block.min_position.row..=block.max_position.row).all(|row| {
+                usize::try_from(i8::try_from(block.min_position.col).unwrap() - 1)
+                    .ok()
+                    .is_some_and(|col_above| {
+                        Position::new(row, col_above)
+                            .is_some_and(|new_position| !self.filled[row][new_position.col])
+                    })
             }),
-            Step::Right => (min_position.row()..=max_position.row()).all(|row| {
-                Position::new(row as i8, max_position.col() as i8 + 1)
-                    .is_some_and(|new_position| !self.filled[row][new_position.col()])
+            Step::Right => (block.min_position.row..=block.max_position.row).all(|row| {
+                Position::new(row, block.max_position.col + 1)
+                    .is_some_and(|new_position| !self.filled[row][new_position.col])
             }),
         }
     }
@@ -98,23 +103,22 @@ impl Board {
         for depth in 0..Self::NUM_EMPTY_CELLS {
             for i in 0..moves.len() {
                 for step in &moves[i] {
-                    let _ = block.do_step(step);
+                    block.do_step(step).unwrap();
                 }
 
                 for step in &Step::ALL {
                     if self.is_step_valid_for_block(&block, step) && block.do_step(step).is_ok() {
                         let mut new_move = moves[i].clone();
-
                         new_move.push(step.clone());
 
                         moves.push(new_move);
 
-                        let _ = block.undo_step(step);
+                        block.undo_step(step).unwrap();
                     }
                 }
 
                 for step in moves[i].iter().rev() {
-                    let _ = block.undo_step(step);
+                    block.undo_step(step).unwrap();
                 }
             }
 
@@ -143,24 +147,12 @@ impl Board {
         }
     }
 
-    pub fn blocks(&self) -> &Vec<PositionedBlock> {
-        &self.blocks
-    }
-
-    pub fn filled(&self) -> &[[bool; Self::COLS]; Self::ROWS] {
-        &self.filled
-    }
-
-    pub fn moves(&self) -> &Vec<Move> {
-        &self.moves
-    }
-
     pub fn hash(&self) -> String {
         let mut block_id_matrix = [[0u8; Self::COLS]; Self::ROWS];
 
         for block in &self.blocks {
             for (i, j) in block.range() {
-                block_id_matrix[i][j] = block.block_id();
+                block_id_matrix[i][j] = block.block_id;
             }
         }
 
@@ -176,7 +168,7 @@ impl Board {
 
     pub fn is_ready_to_solve(&self) -> bool {
         let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
-            acc + u8::from(curr.block_id() == Self::WINNING_BLOCK_ID)
+            acc + u8::from(curr.block_id == Self::WINNING_BLOCK_ID)
         });
 
         if num_winning_blocks != 1 {
@@ -194,9 +186,9 @@ impl Board {
 
     pub fn is_solved(&self) -> bool {
         self.blocks.iter().any(|block| {
-            block.block_id() == Self::WINNING_BLOCK_ID
-                && block.min_position().row() == Self::WINNING_ROW
-                && block.min_position().col() == Self::WINNING_COL
+            block.block_id == Self::WINNING_BLOCK_ID
+                && block.min_position.row == Self::WINNING_ROW
+                && block.min_position.col == Self::WINNING_COL
         })
     }
 
@@ -233,16 +225,13 @@ impl Board {
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        if block.block_id() == new_block_id {
+        if block.block_id == new_block_id {
             return Ok(());
         }
 
-        let new_block = PositionedBlock::new(
-            new_block_id,
-            block.min_position().row(),
-            block.min_position().col(),
-        )
-        .ok_or(BoardError::BlockPlacementInvalid)?;
+        let new_block =
+            PositionedBlock::new(new_block_id, block.min_position.row, block.min_position.col)
+                .ok_or(BoardError::BlockPlacementInvalid)?;
 
         self.updated_filled_range(block.range(), false);
 
@@ -273,12 +262,14 @@ impl Board {
 
         self.updated_filled_range(block.range(), false);
 
-        let new_block = PositionedBlock::new(
-            block.block_id(),
-            (block.min_position().row() as i8 + row_diff) as usize,
-            (block.min_position().col() as i8 + col_diff) as usize,
-        )
-        .ok_or(BoardError::BlockPlacementInvalid)?;
+        let new_min_position = block
+            .min_position
+            .move_by(row_diff, col_diff)
+            .ok_or(BoardError::BlockPlacementInvalid)?;
+
+        let new_block =
+            PositionedBlock::new(block.block_id, new_min_position.row, new_min_position.col)
+                .ok_or(BoardError::BlockPlacementInvalid)?;
 
         self.updated_filled_range(new_block.range(), true);
 
@@ -309,13 +300,13 @@ impl Board {
 
         let mut block = self
             .blocks
-            .get(move_.block_idx())
+            .get(move_.block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.do_move(&mut block, move_.opposite().steps())?;
+        self.do_move(&mut block, move_.opposite().steps.as_slice())?;
 
-        self.blocks[move_.block_idx()] = block;
+        self.blocks[move_.block_idx] = block;
 
         Ok(())
     }
@@ -548,7 +539,7 @@ mod tests {
 
         assert!(!board.is_solved());
 
-        let _ = block.do_step(&Step::Down);
+        block.do_step(&Step::Down).unwrap();
         board.blocks[0] = block;
 
         assert!(board.is_solved())

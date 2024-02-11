@@ -4,32 +4,24 @@ use super::board::Board;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Position {
-    row: usize,
-    col: usize,
+    pub row: usize,
+    pub col: usize,
 }
 
 impl Position {
-    pub fn new(row: i8, col: i8) -> Option<Self> {
-        if row < 0 || row >= Board::ROWS as i8 || col < 0 || col >= Board::COLS as i8 {
-            return None;
+    pub fn new(row: usize, col: usize) -> Option<Self> {
+        if row < Board::ROWS && col < Board::COLS {
+            Some(Self { row, col })
+        } else {
+            None
         }
-
-        Some(Self {
-            row: row as usize,
-            col: col as usize,
-        })
     }
 
-    pub fn row(&self) -> usize {
-        self.row
-    }
-
-    pub fn col(&self) -> usize {
-        self.col
-    }
-
-    pub fn to_array(&self) -> [usize; 2] {
-        [self.row, self.col]
+    pub fn move_by(&self, row_diff: i8, col_diff: i8) -> Option<Self> {
+        Position::new(
+            usize::try_from(i8::try_from(self.row).unwrap() + row_diff).ok()?,
+            usize::try_from(i8::try_from(self.col).unwrap() + col_diff).ok()?,
+        )
     }
 }
 
@@ -42,17 +34,12 @@ mod tests {
     fn valid_positions() {
         assert!(
             Position::new(0, 0).is_some()
-                && Position::new(Board::ROWS as i8 - 1, Board::COLS as i8 - 1).is_some()
+                && Position::new(Board::ROWS - 1, Board::COLS - 1).is_some()
         );
     }
 
     #[test]
     fn invalid_positions() {
-        assert!(
-            Position::new(-1, 0).is_none()
-                && Position::new(0, -1).is_none()
-                && Position::new(Board::ROWS as i8, 0).is_none()
-                && Position::new(0, Board::COLS as i8).is_none()
-        );
+        assert!(Position::new(Board::ROWS, 0).is_none() && Position::new(0, Board::COLS).is_none());
     }
 }

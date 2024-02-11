@@ -21,9 +21,9 @@ impl BoardState {
             id: String::from(new_id),
             is_ready_to_solve: board.is_ready_to_solve(),
             is_solved: board.is_solved(),
-            blocks: to_string(&board.blocks()).unwrap(),
-            filled: to_string(&board.filled()).unwrap(),
-            moves: to_string(&board.moves()).unwrap(),
+            blocks: to_string(&board.blocks).unwrap(),
+            filled: to_string(&board.filled).unwrap(),
+            moves: to_string(&board.moves).unwrap(),
         }
     }
 
