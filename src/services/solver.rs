@@ -206,7 +206,7 @@ mod tests {
     }
 
     #[test]
-    fn test_short_board() {
+    fn test_easy_board() {
         let blocks = [
             PositionedBlock::new(1, 0, 0).unwrap(),
             PositionedBlock::new(4, 0, 1).unwrap(),
