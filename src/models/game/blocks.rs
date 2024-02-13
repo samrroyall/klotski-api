@@ -42,24 +42,24 @@ pub struct Positioned {
     pub block_id: u8,
     pub min_position: Position,
     pub max_position: Position,
-    pub range: Vec<(usize, usize)>,
+    pub range: Vec<(u8, u8)>,
 }
 
 impl Positioned {
-    fn range(min_position: &Position, max_position: &Position) -> Vec<(usize, usize)> {
+    fn range(min_position: &Position, max_position: &Position) -> Vec<(u8, u8)> {
         (min_position.row..=max_position.row)
             .flat_map(move |i| (min_position.col..=max_position.col).map(move |j| (i, j)))
             .collect()
     }
 
-    pub fn new(block_id: u8, min_row: usize, min_col: usize) -> Option<Self> {
+    pub fn new(block_id: u8, min_row: u8, min_col: u8) -> Option<Self> {
         let block = Block::from_id(block_id)?;
 
         let min_position = Position::new(min_row, min_col)?;
 
         let max_position = Position::new(
-            min_row + usize::from(block.rows() - 1),
-            min_col + usize::from(block.cols() - 1),
+            min_row + block.rows() - 1,
+            min_col + block.cols() - 1,
         )?;
 
         Some(Self {

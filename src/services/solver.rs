@@ -52,7 +52,7 @@ impl Solver {
 
         let board = parent_node.borrow().board.clone();
 
-        for (block_idx, moves) in board.get_next_moves().into_iter().enumerate() {
+        for (block_idx, moves) in (0u8..).zip(board.get_next_moves()) {
             for move_ in moves {
                 let child_move = FlatBoardMove::new(block_idx, &move_);
 

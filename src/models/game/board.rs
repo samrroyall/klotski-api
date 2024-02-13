@@ -8,33 +8,33 @@ use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 pub struct Board {
     pub blocks: Vec<PositionedBlock>,
     pub moves: Vec<Move>,
-    pub filled: [[bool; Self::COLS]; Self::ROWS],
+    pub filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
 }
 
 impl Default for Board {
     fn default() -> Self {
-        Self::new(vec![], vec![], [[false; Self::COLS]; Self::ROWS])
+        Self::new(vec![], vec![], [[false; Self::COLS as usize]; Self::ROWS as usize])
     }
 }
 
 impl Board {
-    pub const ROWS: usize = 5;
-    pub const COLS: usize = 4;
+    pub const ROWS: u8 = 5;
+    pub const COLS: u8 = 4;
     pub const NUM_EMPTY_CELLS: u8 = 2;
 
     const WINNING_BLOCK_ID: u8 = 4;
-    const WINNING_ROW: usize = 3;
-    const WINNING_COL: usize = 1;
+    const WINNING_ROW: u8 = 3;
+    const WINNING_COL: u8 = 1;
 
-    fn updated_filled_range(&mut self, range: &Vec<(usize, usize)>, value: bool) {
+    fn updated_filled_range(&mut self, range: &Vec<(u8, u8)>, value: bool) {
         for (i, j) in range {
-            self.filled[*i][*j] = value;
+            self.filled[usize::from(*i)][usize::from(*j)] = value;
         }
     }
 
-    fn is_range_empty(&self, range: &Vec<(usize, usize)>) -> bool {
+    fn is_range_empty(&self, range: &Vec<(u8, u8)>) -> bool {
         for (i, j) in range {
-            if self.filled[*i][*j] {
+            if self.filled[usize::from(*i)][usize::from(*j)] {
                 return false;
             }
         }
@@ -69,28 +69,28 @@ impl Board {
     fn is_step_valid_for_block(&self, block: &PositionedBlock, step: &Step) -> bool {
         match step {
             Step::Up => (block.min_position.col..=block.max_position.col).all(|col| {
-                usize::try_from(i8::try_from(block.min_position.row).unwrap() - 1)
+                u8::try_from(i8::try_from(block.min_position.row).unwrap() - 1)
                     .ok()
                     .is_some_and(|row_above| {
                         Position::new(row_above, col)
-                            .is_some_and(|new_position| !self.filled[new_position.row][col])
+                            .is_some_and(|new_position| !self.filled[usize::from(new_position.row)][usize::from(col)])
                     })
             }),
             Step::Down => (block.min_position.col..=block.max_position.col).all(|col| {
                 Position::new(block.max_position.row + 1, col)
-                    .is_some_and(|new_position| !self.filled[new_position.row][col])
+                    .is_some_and(|new_position| !self.filled[usize::from(new_position.row)][usize::from(col)])
             }),
             Step::Left => (block.min_position.row..=block.max_position.row).all(|row| {
-                usize::try_from(i8::try_from(block.min_position.col).unwrap() - 1)
+                u8::try_from(i8::try_from(block.min_position.col).unwrap() - 1)
                     .ok()
                     .is_some_and(|col_above| {
                         Position::new(row, col_above)
-                            .is_some_and(|new_position| !self.filled[row][new_position.col])
+                            .is_some_and(|new_position| !self.filled[usize::from(row)][usize::from(new_position.col)])
                     })
             }),
             Step::Right => (block.min_position.row..=block.max_position.row).all(|row| {
                 Position::new(row, block.max_position.col + 1)
-                    .is_some_and(|new_position| !self.filled[row][new_position.col])
+                    .is_some_and(|new_position| !self.filled[usize::from(row)][usize::from(new_position.col)])
             }),
         }
     }
@@ -138,7 +138,7 @@ impl Board {
     pub fn new(
         blocks: Vec<PositionedBlock>,
         moves: Vec<Move>,
-        filled: [[bool; Self::COLS]; Self::ROWS],
+        filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
     ) -> Self {
         Self {
             blocks,
@@ -148,11 +148,11 @@ impl Board {
     }
 
     pub fn hash(&self) -> String {
-        let mut block_id_matrix = [[0u8; Self::COLS]; Self::ROWS];
+        let mut block_id_matrix = [[0u8; Self::COLS as usize]; Self::ROWS as usize];
 
         for block in &self.blocks {
             for (i, j) in &block.range {
-                block_id_matrix[*i][*j] = block.block_id;
+                block_id_matrix[usize::from(*i)][usize::from(*j)] = block.block_id;
             }
         }
 
@@ -203,7 +203,9 @@ impl Board {
         Ok(())
     }
 
-    pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
+    pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
+        let block_idx = usize::from(block_idx);
+
         let block = self
             .blocks
             .get(block_idx)
@@ -217,7 +219,9 @@ impl Board {
         Ok(())
     }
 
-    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) -> Result<(), BoardError> {
+    pub fn change_block(&mut self, block_idx: u8, new_block_id: u8) -> Result<(), BoardError> {
+        let block_idx = usize::from(block_idx);
+
         let block = self
             .blocks
             .get(block_idx)
@@ -249,10 +253,12 @@ impl Board {
 
     pub fn move_block_unchecked(
         &mut self,
-        block_idx: usize,
+        block_idx: u8,
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
+        let block_idx = usize::from(block_idx);
+
         let mut block = self
             .blocks
             .get(block_idx)
@@ -270,16 +276,18 @@ impl Board {
         Ok(())
     }
 
-    pub fn move_block(&mut self, block_idx: usize, move_: &[Step]) -> Result<(), BoardError> {
+    pub fn move_block(&mut self, block_idx: u8, move_: &[Step]) -> Result<(), BoardError> {
+        let block_idx_usize = usize::from(block_idx);
+
         let mut block = self
             .blocks
-            .get(block_idx)
+            .get(block_idx_usize)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
         self.do_move(&mut block, move_)?;
 
-        self.blocks[block_idx] = block;
+        self.blocks[block_idx_usize] = block;
 
         self.moves
             .push(Move::new(block_idx, move_.to_vec()).unwrap());
@@ -288,17 +296,19 @@ impl Board {
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
-        let move_ = self.moves.pop().ok_or(BoardError::NoMovesToUndo)?;
+        let opposite_move = self.moves.pop().ok_or(BoardError::NoMovesToUndo)?.opposite();
+
+        let block_idx = usize::from(opposite_move.block_idx);
 
         let mut block = self
             .blocks
-            .get(move_.block_idx)
+            .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.do_move(&mut block, move_.opposite().steps.as_slice())?;
+        self.do_move(&mut block, opposite_move.steps.as_slice())?;
 
-        self.blocks[move_.block_idx] = block;
+        self.blocks[block_idx] = block;
 
         Ok(())
     }

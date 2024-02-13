@@ -115,13 +115,13 @@ pub async fn add_block(
     make_building_update(&params.board_id, update_fn, &pool)
 }
 
-fn change_block(board_id: &String, pool: &DbPool, block_idx: usize, new_block_id: u8) -> Response {
+fn change_block(board_id: &String, pool: &DbPool, block_idx: u8, new_block_id: u8) -> Response {
     let update_fn = |board: &mut Board| board.change_block(block_idx, new_block_id);
 
     make_building_update(board_id, update_fn, pool)
 }
 
-fn move_block(board_id: &String, pool: &DbPool, block_idx: usize, move_: &[Step]) -> Response {
+fn move_block(board_id: &String, pool: &DbPool, block_idx: u8, move_: &[Step]) -> Response {
     let update_fn = |board: &mut Board| {
         if !board.is_ready_to_solve() {
             return Err(BoardError::BoardNotReady);

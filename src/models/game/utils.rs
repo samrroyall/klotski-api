@@ -5,12 +5,12 @@ use crate::errors::board::Error as BoardError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Position {
-    pub row: usize,
-    pub col: usize,
+    pub row: u8,
+    pub col: u8,
 }
 
 impl Position {
-    pub fn new(row: usize, col: usize) -> Option<Self> {
+    pub fn new(row: u8, col: u8) -> Option<Self> {
         if row < Board::ROWS && col < Board::COLS {
             Some(Self { row, col })
         } else {
@@ -19,9 +19,9 @@ impl Position {
     }
 
     pub fn move_by(&mut self, row_diff: i8, col_diff: i8) -> Result<(), BoardError> {
-        let new_row = usize::try_from(i8::try_from(self.row).unwrap() + row_diff)
+        let new_row = u8::try_from(i8::try_from(self.row).unwrap() + row_diff)
             .map_err(|_| BoardError::BlockPlacementInvalid)?;
-        let new_col = usize::try_from(i8::try_from(self.col).unwrap() + col_diff)
+        let new_col = u8::try_from(i8::try_from(self.col).unwrap() + col_diff)
             .map_err(|_| BoardError::BlockPlacementInvalid)?;
 
         if new_row >= Board::ROWS || new_col >= Board::COLS {

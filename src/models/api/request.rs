@@ -10,14 +10,14 @@ pub struct BoardParams {
 #[derive(Debug, Deserialize)]
 pub struct BlockParams {
     pub board_id: String,
-    pub block_idx: usize,
+    pub block_idx: u8,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct AddBlock {
     pub block_id: u8,
-    pub min_row: usize,
-    pub min_col: usize,
+    pub min_row: u8,
+    pub min_col: u8,
 }
 
 #[derive(Debug, Deserialize)]

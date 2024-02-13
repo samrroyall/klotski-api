@@ -41,13 +41,13 @@ impl Step {
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Move {
-    pub block_idx: usize,
+    pub block_idx: u8,
     pub steps: Vec<Step>,
 }
 
 impl Move {
-    pub fn new(block_idx: usize, steps: Vec<Step>) -> Option<Self> {
-        if !steps.is_empty() && steps.len() <= Board::NUM_EMPTY_CELLS as usize {
+    pub fn new(block_idx: u8, steps: Vec<Step>) -> Option<Self> {
+        if !steps.is_empty() && steps.len() <= usize::from(Board::NUM_EMPTY_CELLS) {
             Some(Self { block_idx, steps })
         } else {
             None
@@ -106,13 +106,13 @@ impl FlatMove {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct FlatBoardMove {
-    pub block_idx: usize,
+    pub block_idx: u8,
     pub row_diff: i8,
     pub col_diff: i8,
 }
 
 impl FlatBoardMove {
-    pub fn new(block_idx: usize, move_: &FlatMove) -> Self {
+    pub fn new(block_idx: u8, move_: &FlatMove) -> Self {
         Self {
             block_idx,
             row_diff: move_.row_diff,
