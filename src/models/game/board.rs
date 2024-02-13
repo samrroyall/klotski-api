@@ -26,15 +26,15 @@ impl Board {
     const WINNING_ROW: usize = 3;
     const WINNING_COL: usize = 1;
 
-    fn updated_filled_range(&mut self, range: Vec<(usize, usize)>, value: bool) {
+    fn updated_filled_range(&mut self, range: &Vec<(usize, usize)>, value: bool) {
         for (i, j) in range {
-            self.filled[i][j] = value;
+            self.filled[*i][*j] = value;
         }
     }
 
-    fn is_range_empty(&self, range: Vec<(usize, usize)>) -> bool {
+    fn is_range_empty(&self, range: &Vec<(usize, usize)>) -> bool {
         for (i, j) in range {
-            if self.filled[i][j] {
+            if self.filled[*i][*j] {
                 return false;
             }
         }
@@ -45,7 +45,7 @@ impl Board {
     fn do_move(&mut self, block: &mut PositionedBlock, move_: &[Step]) -> Result<(), BoardError> {
         let mut step_stack = vec![];
 
-        self.updated_filled_range(block.range(), false);
+        self.updated_filled_range(&block.range, false);
 
         for step in move_ {
             if self.is_step_valid_for_block(block, step) && block.do_step(step).is_ok() {
@@ -55,13 +55,13 @@ impl Board {
                     block.undo_step(step).unwrap();
                 }
 
-                self.updated_filled_range(block.range(), true);
+                self.updated_filled_range(&block.range, true);
 
                 return Err(BoardError::BlockPlacementInvalid);
             }
         }
 
-        self.updated_filled_range(block.range(), true);
+        self.updated_filled_range(&block.range, true);
 
         Ok(())
     }
@@ -129,7 +129,7 @@ impl Board {
 
         moves
             .into_iter()
-            .map(|move_| FlatMove::from_steps(&move_))
+            .map(|move_| FlatMove::from_steps(move_.as_slice()))
             .collect()
     }
 }
@@ -151,17 +151,16 @@ impl Board {
         let mut block_id_matrix = [[0u8; Self::COLS]; Self::ROWS];
 
         for block in &self.blocks {
-            for (i, j) in block.range() {
-                block_id_matrix[i][j] = block.block_id;
+            for (i, j) in &block.range {
+                block_id_matrix[*i][*j] = block.block_id;
             }
         }
 
         block_id_matrix
             .into_iter()
-            .map(|row| {
+            .flat_map(|row| {
                 row.into_iter()
-                    .map(|cell| cell.to_string())
-                    .collect::<String>()
+                    .map(|cell| char::from_digit(u32::from(cell), 10).unwrap())
             })
             .collect()
     }
@@ -193,11 +192,11 @@ impl Board {
     }
 
     pub fn add_block(&mut self, block: PositionedBlock) -> Result<(), BoardError> {
-        if !self.is_range_empty(block.range()) {
+        if !self.is_range_empty(&block.range) {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.updated_filled_range(block.range(), true);
+        self.updated_filled_range(&block.range, true);
 
         self.blocks.push(block);
 
@@ -211,7 +210,7 @@ impl Board {
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.updated_filled_range(block.range(), false);
+        self.updated_filled_range(&block.range, false);
 
         self.blocks.swap_remove(block_idx);
 
@@ -233,47 +232,40 @@ impl Board {
             PositionedBlock::new(new_block_id, block.min_position.row, block.min_position.col)
                 .ok_or(BoardError::BlockPlacementInvalid)?;
 
-        self.updated_filled_range(block.range(), false);
+        self.updated_filled_range(&block.range, false);
 
-        if !self.is_range_empty(new_block.range()) {
-            self.updated_filled_range(block.range(), true);
+        if !self.is_range_empty(&new_block.range) {
+            self.updated_filled_range(&block.range, true);
 
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.updated_filled_range(new_block.range(), true);
+        self.updated_filled_range(&new_block.range, true);
 
         self.blocks[block_idx] = new_block;
 
         Ok(())
     }
 
-    pub fn move_block_optimistic(
+    pub fn move_block_unchecked(
         &mut self,
         block_idx: usize,
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
-        let block = self
+        let mut block = self
             .blocks
             .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.updated_filled_range(block.range(), false);
+        self.updated_filled_range(&block.range, false);
 
-        let new_min_position = block
-            .min_position
-            .move_by(row_diff, col_diff)
-            .ok_or(BoardError::BlockPlacementInvalid)?;
+        block.move_by(row_diff, col_diff).unwrap();
 
-        let new_block =
-            PositionedBlock::new(block.block_id, new_min_position.row, new_min_position.col)
-                .ok_or(BoardError::BlockPlacementInvalid)?;
+        self.updated_filled_range(&block.range, true);
 
-        self.updated_filled_range(new_block.range(), true);
-
-        self.blocks[block_idx] = new_block;
+        self.blocks[block_idx] = block;
 
         Ok(())
     }
@@ -316,9 +308,7 @@ impl Board {
             .iter()
             .map(|block| {
                 let mut moves = self.get_next_moves_for_block(block);
-
                 moves.dedup();
-
                 moves
             })
             .collect()
@@ -334,11 +324,11 @@ mod tests {
         let mut board = Board::default();
 
         let block = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block.range(), true);
+        board.updated_filled_range(&block.range, true);
 
         assert!(board.filled[0][0]);
 
-        board.updated_filled_range(block.range(), false);
+        board.updated_filled_range(&block.range, false);
 
         assert!(!board.filled[0][0]);
     }
@@ -348,12 +338,12 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
 
         let block_two = PositionedBlock::new(2, 1, 0).unwrap();
 
-        assert!(!board.is_range_empty(block_one.range()));
-        assert!(board.is_range_empty(block_two.range()));
+        assert!(!board.is_range_empty(&block_one.range));
+        assert!(board.is_range_empty(&block_two.range));
     }
 
     #[test]
@@ -361,18 +351,18 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
 
         let block_two = PositionedBlock::new(2, 0, 1).unwrap();
-        board.updated_filled_range(block_two.range(), true);
+        board.updated_filled_range(&block_two.range, true);
 
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Left));
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Right));
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Up));
         assert!(board.is_step_valid_for_block(&block_one, &Step::Down));
 
-        let block_three_range = PositionedBlock::new(1, 1, 0).unwrap().range();
-        board.updated_filled_range(block_three_range, true);
+        let block_three = PositionedBlock::new(1, 1, 0).unwrap();
+        board.updated_filled_range(&block_three.range, true);
 
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Down));
 
@@ -393,13 +383,13 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
 
         let block_two = PositionedBlock::new(1, 0, 1).unwrap();
-        board.updated_filled_range(block_two.range(), true);
+        board.updated_filled_range(&block_two.range, true);
 
         let block_three = PositionedBlock::new(1, 1, 0).unwrap();
-        board.updated_filled_range(block_three.range(), true);
+        board.updated_filled_range(&block_three.range, true);
 
         let block_one_moves = board.get_next_moves_for_block(&block_one);
 
@@ -439,13 +429,13 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 4, 3).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
 
         let block_two = PositionedBlock::new(1, 4, 2).unwrap();
-        board.updated_filled_range(block_two.range(), true);
+        board.updated_filled_range(&block_two.range, true);
 
-        let block_three_range = PositionedBlock::new(1, 3, 3).unwrap().range();
-        board.updated_filled_range(block_three_range, true);
+        let block_three = PositionedBlock::new(1, 3, 3).unwrap();
+        board.updated_filled_range(&block_three.range, true);
 
         let block_one_moves = board.get_next_moves_for_block(&block_one);
 
@@ -496,7 +486,7 @@ mod tests {
         ];
 
         for block in blocks.iter() {
-            board.updated_filled_range(block.range(), true);
+            board.updated_filled_range(&block.range, true);
             board.blocks.push(block.clone());
         }
 
@@ -519,13 +509,13 @@ mod tests {
         let final_block = PositionedBlock::new(1, 4, 3).unwrap();
 
         for block in blocks.iter() {
-            board.updated_filled_range(block.range(), true);
+            board.updated_filled_range(&block.range, true);
             board.blocks.push(block.clone());
 
             assert!(!board.is_ready_to_solve());
         }
 
-        board.updated_filled_range(final_block.range(), true);
+        board.updated_filled_range(&final_block.range, true);
         board.blocks.push(final_block);
 
         assert!(board.is_ready_to_solve());
@@ -574,7 +564,7 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(2, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one.clone());
 
         assert!(board.remove_block(0).is_ok());
@@ -588,7 +578,7 @@ mod tests {
         let mut board = Board::default();
 
         let block = PositionedBlock::new(2, 0, 0).unwrap();
-        board.updated_filled_range(block.range(), true);
+        board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
 
         assert!(board.change_block(0, 1).is_ok());
@@ -606,18 +596,18 @@ mod tests {
     }
 
     #[test]
-    fn move_block_optimistic() {
+    fn move_block_unchecked() {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one);
 
         let block_two = PositionedBlock::new(1, 0, 1).unwrap();
-        board.updated_filled_range(block_two.range(), true);
+        board.updated_filled_range(&block_two.range, true);
         board.blocks.push(block_two);
 
-        assert!(board.move_block_optimistic(0, 1, 0).is_ok());
+        assert!(board.move_block_unchecked(0, 1, 0).is_ok());
         assert_eq!(
             board.filled,
             [
@@ -629,7 +619,7 @@ mod tests {
             ]
         );
 
-        assert!(board.move_block_optimistic(0, 0, 1).is_ok());
+        assert!(board.move_block_unchecked(0, 0, 1).is_ok());
         assert_eq!(
             board.filled,
             [
@@ -641,7 +631,7 @@ mod tests {
             ]
         );
 
-        assert!(board.move_block_optimistic(0, -1, 0).is_ok());
+        assert!(board.move_block_unchecked(0, -1, 0).is_ok());
 
         assert_eq!(
             board.filled,
@@ -660,7 +650,7 @@ mod tests {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(block_one.range(), true);
+        board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one);
 
         assert!(board.move_block(0, &[Step::Right]).is_ok());
@@ -682,7 +672,7 @@ mod tests {
         assert!(board.move_block(0, &[Step::Left]).is_err());
 
         let block_two = PositionedBlock::new(4, 3, 2).unwrap();
-        board.updated_filled_range(block_two.range(), true);
+        board.updated_filled_range(&block_two.range, true);
         board.blocks.push(block_two);
 
         assert_eq!(
@@ -718,7 +708,7 @@ mod tests {
     fn undo_move() {
         let mut board = Board::default();
         let block = PositionedBlock::new(1, 2, 0).unwrap();
-        board.updated_filled_range(block.range(), true);
+        board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
         board.moves = vec![
             Move::new(0, vec![Step::Right]).unwrap(),

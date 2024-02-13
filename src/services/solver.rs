@@ -63,7 +63,7 @@ impl Solver {
                 let mut child_board = board.clone();
 
                 child_board
-                    .move_block_optimistic(block_idx, move_.row_diff, move_.col_diff)
+                    .move_block_unchecked(block_idx, move_.row_diff, move_.col_diff)
                     .unwrap();
 
                 if !self.upsert_hash(child_board.hash()) {
@@ -194,7 +194,7 @@ mod tests {
 
         for move_ in moves.iter() {
             board
-                .move_block_optimistic(move_.block_idx, move_.row_diff, move_.col_diff)
+                .move_block_unchecked(move_.block_idx, move_.row_diff, move_.col_diff)
                 .unwrap();
         }
 
