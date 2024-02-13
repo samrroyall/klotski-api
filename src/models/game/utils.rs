@@ -1,6 +1,7 @@
 use serde::{Deserialize, Serialize};
 
 use super::board::Board;
+use crate::errors::board::Error as BoardError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 pub struct Position {
@@ -17,11 +18,20 @@ impl Position {
         }
     }
 
-    pub fn move_by(&self, row_diff: i8, col_diff: i8) -> Option<Self> {
-        Position::new(
-            usize::try_from(i8::try_from(self.row).unwrap() + row_diff).ok()?,
-            usize::try_from(i8::try_from(self.col).unwrap() + col_diff).ok()?,
-        )
+    pub fn move_by(&mut self, row_diff: i8, col_diff: i8) -> Result<(), BoardError> {
+        let new_row = usize::try_from(i8::try_from(self.row).unwrap() + row_diff)
+            .map_err(|_| BoardError::BlockPlacementInvalid)?;
+        let new_col = usize::try_from(i8::try_from(self.col).unwrap() + col_diff)
+            .map_err(|_| BoardError::BlockPlacementInvalid)?;
+
+        if new_row >= Board::ROWS || new_col >= Board::COLS {
+            return Err(BoardError::BlockPlacementInvalid);
+        }
+
+        self.row = new_row;
+        self.col = new_col;
+
+        Ok(())
     }
 }
 
