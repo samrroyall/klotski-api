@@ -1,8 +1,7 @@
 use serde::{Deserialize, Serialize};
 
-use crate::errors::board::Error as BoardError;
-
 use super::{moves::Step, utils::Position};
+use crate::errors::board::Error as BoardError;
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
 enum Block {
@@ -43,9 +42,16 @@ pub struct Positioned {
     pub block_id: u8,
     pub min_position: Position,
     pub max_position: Position,
+    pub range: Vec<(usize, usize)>,
 }
 
 impl Positioned {
+    fn range(min_position: &Position, max_position: &Position) -> Vec<(usize, usize)> {
+        (min_position.row..=max_position.row)
+            .flat_map(move |i| (min_position.col..=max_position.col).map(move |j| (i, j)))
+            .collect()
+    }
+
     pub fn new(block_id: u8, min_row: usize, min_col: usize) -> Option<Self> {
         let block = Block::from_id(block_id)?;
 
@@ -58,34 +64,28 @@ impl Positioned {
 
         Some(Self {
             block_id,
+            range: Self::range(&min_position, &max_position),
             min_position,
             max_position,
         })
     }
 
-    pub fn range(&self) -> Vec<(usize, usize)> {
-        (self.min_position.row..=self.max_position.row)
-            .flat_map(move |i| (self.min_position.col..=self.max_position.col).map(move |j| (i, j)))
-            .collect()
-    }
+    pub fn move_by(&mut self, row_diff: i8, col_diff: i8) -> Result<(), BoardError> {
+        let mut new_min_position = self.min_position.clone();
+        let mut new_max_position = self.max_position.clone();
 
-    pub fn do_step(&mut self, step: &Step) -> Result<(), BoardError> {
-        let row_diff = step.row_diff();
-        let col_diff = step.col_diff();
+        new_min_position.move_by(row_diff, col_diff)?;
+        new_max_position.move_by(row_diff, col_diff)?;
 
-        let new_min_position = self
-            .min_position
-            .move_by(row_diff, col_diff)
-            .ok_or(BoardError::BlockIndexOutOfBounds)?;
-        let new_max_position = self
-            .max_position
-            .move_by(row_diff, col_diff)
-            .ok_or(BoardError::BlockIndexOutOfBounds)?;
-
+        self.range = Self::range(&new_min_position, &new_max_position);
         self.min_position = new_min_position;
         self.max_position = new_max_position;
 
         Ok(())
+    }
+
+    pub fn do_step(&mut self, step: &Step) -> Result<(), BoardError> {
+        self.move_by(step.row_diff(), step.col_diff())
     }
 
     pub fn undo_step(&mut self, step: &Step) -> Result<(), BoardError> {
