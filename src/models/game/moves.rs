@@ -104,7 +104,7 @@ impl FlatMove {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
 pub struct FlatBoardMove {
     pub block_idx: usize,
     pub row_diff: i8,
