@@ -1,5 +1,5 @@
 -- Your SQL goes here
-CREATE TABLE board_states (
+CREATE TABLE boards (
     id     SERIAL PRIMARY KEY,
     state  VARCHAR(20) NOT NULL,
     blocks TEXT NOT NULL,

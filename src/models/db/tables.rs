@@ -3,18 +3,18 @@ use diesel::prelude::*;
 use crate::models::game::board::Board;
 
 #[derive(Debug, Insertable, AsChangeset)]
-#[diesel(table_name = super::schema::board_states)]
-pub struct InsertableBoardState {
+#[diesel(table_name = super::schema::boards)]
+pub struct InsertableBoard {
     pub state: String,
     pub blocks: String,
     pub filled: String,
     pub moves: String,
 }
 
-impl InsertableBoardState {
+impl InsertableBoard {
     pub fn from(board: &Board) -> Self {
         Self {
-            state: board.state.to_string(),
+            state: serde_json::to_string(&board.state).unwrap(),
             blocks: serde_json::to_string(&board.blocks).unwrap(),
             filled: serde_json::to_string(&board.filled).unwrap(),
             moves: serde_json::to_string(&board.moves).unwrap(),
@@ -23,8 +23,8 @@ impl InsertableBoardState {
 }
 
 #[derive(Debug, Clone, Selectable, Queryable)]
-#[diesel(table_name = super::schema::board_states)]
-pub struct BoardState {
+#[diesel(table_name = super::schema::boards)]
+pub struct SelectableBoard {
     pub id: i32,
     pub state: String,
     pub blocks: String,
@@ -32,7 +32,7 @@ pub struct BoardState {
     pub moves: String,
 }
 
-impl BoardState {
+impl SelectableBoard {
     pub fn to_board(&self) -> Board {
         Board::new(
             serde_json::from_str(&self.state).unwrap(),

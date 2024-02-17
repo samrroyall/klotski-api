@@ -1,10 +1,10 @@
 use diesel::prelude::*;
 
 use crate::errors::board::Error as BoardError;
-use crate::models::db::schema::board_states::dsl::{board_states, id};
+use crate::models::db::schema::boards::dsl::{boards, id};
 use crate::models::game::moves::FlatMove;
 use crate::models::{
-    db::tables::{BoardState, InsertableBoardState},
+    db::tables::{InsertableBoard, SelectableBoard},
     game::board::Board,
 };
 use crate::services::db::Pool as DbPool;
@@ -27,24 +27,24 @@ impl From<diesel::result::Error> for Error {
     }
 }
 
-pub fn create(pool: &DbPool) -> Result<BoardState, Error> {
+pub fn create(pool: &DbPool) -> Result<SelectableBoard, Error> {
     let mut conn = pool.get().unwrap();
 
-    let new_board_state = InsertableBoardState::from(&Board::default());
+    let new_board_state = InsertableBoard::from(&Board::default());
 
-    let result = diesel::insert_into(board_states)
+    let result = diesel::insert_into(boards)
         .values(&new_board_state)
         .get_result(&mut conn)?;
 
     Ok(result)
 }
 
-pub fn get(search_id: i32, pool: &DbPool) -> Result<BoardState, Error> {
+pub fn get(search_id: i32, pool: &DbPool) -> Result<SelectableBoard, Error> {
     let mut conn = pool.get().unwrap();
 
-    let board_state = board_states
+    let board_state = boards
         .filter(id.eq(search_id))
-        .first::<BoardState>(&mut conn)?;
+        .first::<SelectableBoard>(&mut conn)?;
 
     Ok(board_state)
 }
@@ -52,7 +52,7 @@ pub fn get(search_id: i32, pool: &DbPool) -> Result<BoardState, Error> {
 fn get_count(pool: &DbPool) -> i64 {
     let mut conn = pool.get().unwrap();
 
-    board_states.count().first::<i64>(&mut conn).unwrap()
+    boards.count().first::<i64>(&mut conn).unwrap()
 }
 
 pub fn delete(search_id: i32, pool: &DbPool) -> Result<(), Error> {
@@ -60,7 +60,7 @@ pub fn delete(search_id: i32, pool: &DbPool) -> Result<(), Error> {
 
     let old_count = get_count(pool);
 
-    diesel::delete(board_states.filter(id.eq(search_id))).execute(&mut conn)?;
+    diesel::delete(boards.filter(id.eq(search_id))).execute(&mut conn)?;
 
     if get_count(pool) == old_count {
         return Err(Error::BoardError(BoardError::BoardNotFound));
@@ -75,11 +75,11 @@ where
 {
     let mut conn = pool.get().unwrap();
 
-    let board_state = board_states
+    let board_record = boards
         .filter(id.eq(search_id))
-        .first::<BoardState>(&mut conn)?;
+        .first::<SelectableBoard>(&mut conn)?;
 
-    let mut board = board_state.to_board();
+    let mut board = board_record.to_board();
 
     update_fn(&mut board)?;
 
@@ -90,17 +90,17 @@ pub fn update_while_building<F>(
     search_id: i32,
     update_fn: F,
     pool: &DbPool,
-) -> Result<BoardState, Error>
+) -> Result<SelectableBoard, Error>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
     let updated_board = get_updated(search_id, update_fn, pool)?;
 
-    let new_board_state = InsertableBoardState::from(&updated_board);
+    let new_board_state = InsertableBoard::from(&updated_board);
 
     let mut conn = pool.get().unwrap();
 
-    let result = diesel::update(board_states.filter(id.eq(search_id)))
+    let result = diesel::update(boards.filter(id.eq(search_id)))
         .set(&new_board_state)
         .get_result(&mut conn)?;
 
@@ -113,7 +113,7 @@ pub fn update_while_solving<F>(
     search_id: i32,
     update_fn: F,
     pool: &DbPool,
-) -> Result<(BoardState, NextMoves), Error>
+) -> Result<(SelectableBoard, NextMoves), Error>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -121,11 +121,11 @@ where
 
     let next_moves = updated_board.get_next_moves();
 
-    let new_board_state = InsertableBoardState::from(&updated_board);
+    let new_board_state = InsertableBoard::from(&updated_board);
 
     let mut conn = pool.get().unwrap();
 
-    let result = diesel::update(board_states.filter(id.eq(search_id)))
+    let result = diesel::update(boards.filter(id.eq(search_id)))
         .set(&new_board_state)
         .get_result(&mut conn)?;
 

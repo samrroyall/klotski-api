@@ -1,5 +1,3 @@
-use std::fmt;
-
 use serde::{Deserialize, Serialize};
 
 use super::{
@@ -14,17 +12,6 @@ pub enum State {
     ReadyToSolve,
     Solving,
     DoneSolving,
-}
-
-impl fmt::Display for State {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            State::Building => write!(f, "Building"),
-            State::ReadyToSolve => write!(f, "ReadytoSolve"),
-            State::Solving => write!(f, "Solving"),
-            State::DoneSolving => write!(f, "DoneSolving"),
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
