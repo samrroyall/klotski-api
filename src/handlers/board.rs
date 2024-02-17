@@ -178,7 +178,7 @@ pub async fn undo_move(
     let params = path_extraction.unwrap().0;
 
     let update_fn = |board: &mut Board| {
-        if board.is_ready_to_solve() {
+        if !board.is_ready_to_solve() {
             return Err(BoardError::BoardNotReady);
         }
         board.undo_move()
