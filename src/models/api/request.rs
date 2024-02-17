@@ -4,12 +4,12 @@ use crate::models::game::moves::Step;
 
 #[derive(Debug, Deserialize)]
 pub struct BoardParams {
-    pub board_id: String,
+    pub board_id: i32,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct BlockParams {
-    pub board_id: String,
+    pub board_id: i32,
     pub block_idx: u8,
 }
 

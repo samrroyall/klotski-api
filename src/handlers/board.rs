@@ -15,10 +15,7 @@ use crate::models::{
     api::request::{
         AddBlock as AddBlockRequest, AlterBlock as AlterBlockRequest, BlockParams, BoardParams,
     },
-    api::response::{
-        Building as BuildingResponse, Solve as SolveResponse, Solved as SolvedResponse,
-        Solving as SolvingResponse,
-    },
+    api::response::{Board as BoardResponse, Solve as SolveResponse, Solved as SolvedResponse},
     game::{blocks::Positioned as PositionedBlock, board::Board, moves::Step},
 };
 use crate::repositories::board_states::{
@@ -28,7 +25,7 @@ use crate::repositories::board_states::{
 };
 use crate::services::{db::Pool as DbPool, solver::Solver};
 
-fn make_building_update<F>(board_id: &String, update_fn: F, pool: &DbPool) -> Response
+fn make_building_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -36,14 +33,14 @@ where
         .map(|board_state| {
             (
                 StatusCode::OK,
-                JsonResponse(BuildingResponse::new(&board_state)),
+                JsonResponse(BoardResponse::new(&board_state)),
             )
         })
         .map_err(handle_board_state_repository_error)
         .into_response()
 }
 
-fn make_solving_update<F>(board_id: &String, update_fn: F, pool: &DbPool) -> Response
+fn make_solving_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -51,7 +48,10 @@ where
         .map(|(board_state, next_moves)| {
             (
                 StatusCode::OK,
-                JsonResponse(SolvingResponse::new(&board_state, &next_moves)),
+                JsonResponse(BoardResponse::new_with_next_moves(
+                    &board_state,
+                    &next_moves,
+                )),
             )
         })
         .map_err(handle_board_state_repository_error)
@@ -64,7 +64,7 @@ pub async fn new(Extension(pool): Extension<DbPool>) -> Response {
         .map(|board_state| {
             (
                 StatusCode::OK,
-                JsonResponse(BuildingResponse::new(&board_state)),
+                JsonResponse(BoardResponse::new(&board_state)),
             )
         })
         .map_err(handle_board_state_repository_error)
@@ -82,7 +82,7 @@ pub async fn delete(
 
     let params = path_extraction.unwrap().0;
 
-    delete_board_state(&params.board_id, &pool)
+    delete_board_state(params.board_id, &pool)
         .map(|()| (StatusCode::OK, ()))
         .map_err(handle_board_state_repository_error)
         .into_response()
@@ -112,16 +112,16 @@ pub async fn add_block(
         Err(BoardError::BlockInvalid)
     };
 
-    make_building_update(&params.board_id, update_fn, &pool)
+    make_building_update(params.board_id, update_fn, &pool)
 }
 
-fn change_block(board_id: &String, pool: &DbPool, block_idx: u8, new_block_id: u8) -> Response {
+fn change_block(board_id: i32, pool: &DbPool, block_idx: u8, new_block_id: u8) -> Response {
     let update_fn = |board: &mut Board| board.change_block(block_idx, new_block_id);
 
     make_building_update(board_id, update_fn, pool)
 }
 
-fn move_block(board_id: &String, pool: &DbPool, block_idx: u8, move_: &[Step]) -> Response {
+fn move_block(board_id: i32, pool: &DbPool, block_idx: u8, move_: &[Step]) -> Response {
     let update_fn = |board: &mut Board| {
         if !board.is_ready_to_solve() {
             return Err(BoardError::BoardNotReady);
@@ -152,13 +152,13 @@ pub async fn alter_block(
 
     match body {
         AlterBlockRequest::ChangeBlock(change_block_data) => change_block(
-            &params.board_id,
+            params.board_id,
             &pool,
             params.block_idx,
             change_block_data.new_block_id,
         ),
         AlterBlockRequest::MoveBlock(move_block_data) => move_block(
-            &params.board_id,
+            params.board_id,
             &pool,
             params.block_idx,
             &move_block_data.steps,
@@ -184,7 +184,7 @@ pub async fn undo_move(
         board.undo_move()
     };
 
-    make_solving_update(&params.board_id, update_fn, &pool)
+    make_solving_update(params.board_id, update_fn, &pool)
 }
 
 #[debug_handler]
@@ -200,7 +200,7 @@ pub async fn remove_block(
 
     let update_fn = |board: &mut Board| board.remove_block(params.block_idx);
 
-    make_building_update(&params.board_id, update_fn, &pool)
+    make_building_update(params.board_id, update_fn, &pool)
 }
 
 #[debug_handler]
@@ -214,7 +214,7 @@ pub async fn solve(
 
     let params = path_extraction.unwrap().0;
 
-    get_board_state(&params.board_id, &pool)
+    get_board_state(params.board_id, &pool)
         .map_err(handle_board_state_repository_error)
         .and_then(|board_state| Solver::new(board_state.to_board()).map_err(handle_board_error))
         .map(|mut solver| {

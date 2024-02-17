@@ -57,10 +57,7 @@ impl Positioned {
 
         let min_position = Position::new(min_row, min_col)?;
 
-        let max_position = Position::new(
-            min_row + block.rows() - 1,
-            min_col + block.cols() - 1,
-        )?;
+        let max_position = Position::new(min_row + block.rows() - 1, min_col + block.cols() - 1)?;
 
         Some(Self {
             block_id,

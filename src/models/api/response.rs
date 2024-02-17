@@ -6,37 +6,29 @@ use crate::models::{
 };
 
 #[derive(Debug, Serialize)]
-pub struct Building {
-    id: String,
+pub struct Board {
+    id: i32,
     blocks: String,
-    ready_to_solve: bool,
+    state: String,
+    next_moves: Option<String>,
 }
 
-impl Building {
+impl Board {
     pub fn new(board_state: &BoardState) -> Self {
         Self {
-            id: board_state.id.clone(),
+            id: board_state.id,
             blocks: board_state.blocks.clone(),
-            ready_to_solve: board_state.is_ready_to_solve,
+            state: board_state.state.clone(),
+            next_moves: None,
         }
     }
-}
 
-#[derive(Debug, Serialize)]
-pub struct Solving {
-    id: String,
-    blocks: String,
-    next_moves: String,
-    is_solved: bool,
-}
-
-impl Solving {
-    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
+    pub fn new_with_next_moves(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
         Self {
-            id: board_state.id.clone(),
+            id: board_state.id,
             blocks: board_state.blocks.clone(),
-            next_moves: serde_json::to_string(next_moves).unwrap(),
-            is_solved: board_state.is_solved,
+            state: board_state.state.clone(),
+            next_moves: Some(serde_json::to_string(next_moves).unwrap()),
         }
     }
 }
