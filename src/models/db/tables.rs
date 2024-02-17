@@ -1,34 +1,41 @@
 use diesel::prelude::*;
-use serde_json::to_string;
 
 use crate::models::game::board::Board;
 
-#[derive(AsChangeset, Insertable, Selectable, Queryable, Debug, Clone)]
+#[derive(Debug, Insertable, AsChangeset)]
 #[diesel(table_name = super::schema::board_states)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
+pub struct InsertableBoardState {
+    pub state: String,
+    pub blocks: String,
+    pub filled: String,
+    pub moves: String,
+}
+
+impl InsertableBoardState {
+    pub fn from(board: &Board) -> Self {
+        Self {
+            state: board.state.to_string(),
+            blocks: serde_json::to_string(&board.blocks).unwrap(),
+            filled: serde_json::to_string(&board.filled).unwrap(),
+            moves: serde_json::to_string(&board.moves).unwrap(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Selectable, Queryable)]
+#[diesel(table_name = super::schema::board_states)]
 pub struct BoardState {
-    pub id: String,
-    pub is_ready_to_solve: bool,
-    pub is_solved: bool,
+    pub id: i32,
+    pub state: String,
     pub blocks: String,
     pub filled: String,
     pub moves: String,
 }
 
 impl BoardState {
-    pub fn from(new_id: &String, board: &Board) -> Self {
-        Self {
-            id: String::from(new_id),
-            is_ready_to_solve: board.is_ready_to_solve(),
-            is_solved: board.is_solved(),
-            blocks: to_string(&board.blocks).unwrap(),
-            filled: to_string(&board.filled).unwrap(),
-            moves: to_string(&board.moves).unwrap(),
-        }
-    }
-
     pub fn to_board(&self) -> Board {
         Board::new(
+            serde_json::from_str(&self.state).unwrap(),
             serde_json::from_str(&self.blocks).unwrap(),
             serde_json::from_str(&self.moves).unwrap(),
             serde_json::from_str(&self.filled).unwrap(),

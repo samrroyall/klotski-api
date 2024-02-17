@@ -1,11 +1,35 @@
+use std::fmt;
+
+use serde::{Deserialize, Serialize};
+
 use super::{
     blocks::Positioned as PositionedBlock,
     moves::{FlatMove, Move, Step},
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub enum State {
+    Building,
+    ReadyToSolve,
+    Solving,
+    DoneSolving,
+}
+
+impl fmt::Display for State {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            State::Building => write!(f, "Building"),
+            State::ReadyToSolve => write!(f, "ReadytoSolve"),
+            State::Solving => write!(f, "Solving"),
+            State::DoneSolving => write!(f, "DoneSolving"),
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Board {
+    pub state: State,
     pub blocks: Vec<PositionedBlock>,
     pub moves: Vec<Move>,
     pub filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
@@ -13,7 +37,12 @@ pub struct Board {
 
 impl Default for Board {
     fn default() -> Self {
-        Self::new(vec![], vec![], [[false; Self::COLS as usize]; Self::ROWS as usize])
+        Self::new(
+            State::Building,
+            vec![],
+            vec![],
+            [[false; Self::COLS as usize]; Self::ROWS as usize],
+        )
     }
 }
 
@@ -72,25 +101,29 @@ impl Board {
                 u8::try_from(i8::try_from(block.min_position.row).unwrap() - 1)
                     .ok()
                     .is_some_and(|row_above| {
-                        Position::new(row_above, col)
-                            .is_some_and(|new_position| !self.filled[usize::from(new_position.row)][usize::from(col)])
+                        Position::new(row_above, col).is_some_and(|new_position| {
+                            !self.filled[usize::from(new_position.row)][usize::from(col)]
+                        })
                     })
             }),
             Step::Down => (block.min_position.col..=block.max_position.col).all(|col| {
-                Position::new(block.max_position.row + 1, col)
-                    .is_some_and(|new_position| !self.filled[usize::from(new_position.row)][usize::from(col)])
+                Position::new(block.max_position.row + 1, col).is_some_and(|new_position| {
+                    !self.filled[usize::from(new_position.row)][usize::from(col)]
+                })
             }),
             Step::Left => (block.min_position.row..=block.max_position.row).all(|row| {
                 u8::try_from(i8::try_from(block.min_position.col).unwrap() - 1)
                     .ok()
                     .is_some_and(|col_above| {
-                        Position::new(row, col_above)
-                            .is_some_and(|new_position| !self.filled[usize::from(row)][usize::from(new_position.col)])
+                        Position::new(row, col_above).is_some_and(|new_position| {
+                            !self.filled[usize::from(row)][usize::from(new_position.col)]
+                        })
                     })
             }),
             Step::Right => (block.min_position.row..=block.max_position.row).all(|row| {
-                Position::new(row, block.max_position.col + 1)
-                    .is_some_and(|new_position| !self.filled[usize::from(row)][usize::from(new_position.col)])
+                Position::new(row, block.max_position.col + 1).is_some_and(|new_position| {
+                    !self.filled[usize::from(row)][usize::from(new_position.col)]
+                })
             }),
         }
     }
@@ -136,11 +169,13 @@ impl Board {
 
 impl Board {
     pub fn new(
+        state: State,
         blocks: Vec<PositionedBlock>,
         moves: Vec<Move>,
         filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
     ) -> Self {
         Self {
+            state,
             blocks,
             moves,
             filled,
@@ -296,7 +331,11 @@ impl Board {
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
-        let opposite_move = self.moves.pop().ok_or(BoardError::NoMovesToUndo)?.opposite();
+        let opposite_move = self
+            .moves
+            .pop()
+            .ok_or(BoardError::NoMovesToUndo)?
+            .opposite();
 
         let block_idx = usize::from(opposite_move.block_idx);
 

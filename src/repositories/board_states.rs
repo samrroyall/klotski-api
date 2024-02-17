@@ -1,10 +1,12 @@
 use diesel::prelude::*;
-use uuid::Uuid;
 
 use crate::errors::board::Error as BoardError;
 use crate::models::db::schema::board_states::dsl::{board_states, id};
 use crate::models::game::moves::FlatMove;
-use crate::models::{db::tables::BoardState, game::board::Board};
+use crate::models::{
+    db::tables::{BoardState, InsertableBoardState},
+    game::board::Board,
+};
 use crate::services::db::Pool as DbPool;
 
 #[derive(Debug)]
@@ -28,16 +30,16 @@ impl From<diesel::result::Error> for Error {
 pub fn create(pool: &DbPool) -> Result<BoardState, Error> {
     let mut conn = pool.get().unwrap();
 
-    let board_state = BoardState::from(&Uuid::new_v4().to_string(), &Board::default());
+    let new_board_state = InsertableBoardState::from(&Board::default());
 
-    diesel::insert_into(board_states)
-        .values(board_state.clone())
-        .execute(&mut conn)?;
+    let result = diesel::insert_into(board_states)
+        .values(&new_board_state)
+        .get_result(&mut conn)?;
 
-    Ok(board_state)
+    Ok(result)
 }
 
-pub fn get(search_id: &String, pool: &DbPool) -> Result<BoardState, Error> {
+pub fn get(search_id: i32, pool: &DbPool) -> Result<BoardState, Error> {
     let mut conn = pool.get().unwrap();
 
     let board_state = board_states
@@ -53,7 +55,7 @@ fn get_count(pool: &DbPool) -> i64 {
     board_states.count().first::<i64>(&mut conn).unwrap()
 }
 
-pub fn delete(search_id: &String, pool: &DbPool) -> Result<(), Error> {
+pub fn delete(search_id: i32, pool: &DbPool) -> Result<(), Error> {
     let mut conn = pool.get().unwrap();
 
     let old_count = get_count(pool);
@@ -67,7 +69,7 @@ pub fn delete(search_id: &String, pool: &DbPool) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_updated<F>(search_id: &String, update_fn: F, pool: &DbPool) -> Result<Board, Error>
+fn get_updated<F>(search_id: i32, update_fn: F, pool: &DbPool) -> Result<Board, Error>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -85,7 +87,7 @@ where
 }
 
 pub fn update_while_building<F>(
-    search_id: &String,
+    search_id: i32,
     update_fn: F,
     pool: &DbPool,
 ) -> Result<BoardState, Error>
@@ -94,21 +96,21 @@ where
 {
     let updated_board = get_updated(search_id, update_fn, pool)?;
 
-    let new_board_state = BoardState::from(search_id, &updated_board);
+    let new_board_state = InsertableBoardState::from(&updated_board);
 
     let mut conn = pool.get().unwrap();
 
-    diesel::update(board_states.filter(id.eq(search_id)))
-        .set(new_board_state.clone())
-        .execute(&mut conn)?;
+    let result = diesel::update(board_states.filter(id.eq(search_id)))
+        .set(&new_board_state)
+        .get_result(&mut conn)?;
 
-    Ok(new_board_state)
+    Ok(result)
 }
 
 type NextMoves = Vec<Vec<FlatMove>>;
 
 pub fn update_while_solving<F>(
-    search_id: &String,
+    search_id: i32,
     update_fn: F,
     pool: &DbPool,
 ) -> Result<(BoardState, NextMoves), Error>
@@ -119,13 +121,13 @@ where
 
     let next_moves = updated_board.get_next_moves();
 
-    let new_board_state = BoardState::from(search_id, &updated_board);
+    let new_board_state = InsertableBoardState::from(&updated_board);
 
     let mut conn = pool.get().unwrap();
 
-    diesel::update(board_states.filter(id.eq(search_id)))
-        .set(new_board_state.clone())
-        .execute(&mut conn)?;
+    let result = diesel::update(board_states.filter(id.eq(search_id)))
+        .set(&new_board_state)
+        .get_result(&mut conn)?;
 
-    Ok((new_board_state, next_moves))
+    Ok((result, next_moves))
 }
