@@ -212,9 +212,9 @@ pub async fn solve(
         return handle_path_rejection().into_response();
     }
 
-    let BoardParams { board_id } = path_extraction.unwrap().0;
+    let params = path_extraction.unwrap().0;
 
-    get_board_state(&board_id, &pool)
+    get_board_state(&params.board_id, &pool)
         .map_err(handle_board_state_repository_error)
         .and_then(|board_state| Solver::new(board_state.to_board()).map_err(handle_board_error))
         .map(|mut solver| {
