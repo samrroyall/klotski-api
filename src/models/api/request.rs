@@ -46,5 +46,5 @@ pub struct ChangeState {
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AlterBoard {
     ChangeBoardState(ChangeState),
-    SolveBoard,
+    UndoMove,
 }

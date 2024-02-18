@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::board::Board;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum Step {
     Up,
     Down,
