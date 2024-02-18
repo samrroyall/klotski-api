@@ -3,7 +3,10 @@ use std::collections::{HashSet, VecDeque};
 use std::rc::Rc;
 
 use crate::errors::board::Error as BoardError;
-use crate::models::game::{board::Board, moves::FlatBoardMove};
+use crate::models::game::{
+    board::{Board, State as BoardState},
+    moves::FlatBoardMove,
+};
 
 type Edge = Rc<RefCell<TreeNode>>;
 
@@ -109,17 +112,17 @@ impl Solver {
 }
 
 impl Solver {
-    pub fn new(start_board: Board) -> Result<Self, BoardError> {
-        if !start_board.is_ready_to_solve() {
-            return Err(BoardError::BoardNotReady);
-        }
-
-        if start_board.is_solved() {
-            return Err(BoardError::BoardAlreadySolved);
+    pub fn new(start_board: &mut Board) -> Result<Self, BoardError> {
+        if start_board.state != BoardState::AlgoSolving {
+            if start_board.is_ready_to_solve() {
+                start_board.state = BoardState::AlgoSolving;
+            } else {
+                return Err(BoardError::BoardStateInvalid);
+            }
         }
 
         Ok(Self {
-            start_board,
+            start_board: start_board.clone(),
             seen: HashSet::<String>::new(),
         })
     }
@@ -154,9 +157,9 @@ mod tests {
 
     #[test]
     fn test_not_ready_board() {
-        let board = Board::default();
+        let mut board = Board::default();
 
-        assert!(Solver::new(board).is_err());
+        assert!(Solver::new(&mut board).is_err());
     }
 
     #[test]
@@ -179,7 +182,7 @@ mod tests {
             board.add_block(block).unwrap();
         }
 
-        assert!(Solver::new(board).is_err());
+        assert!(Solver::new(&mut board).is_err());
     }
 
     fn test_solution_works(blocks: &[PositionedBlock]) {
@@ -189,7 +192,7 @@ mod tests {
             board.add_block(block.clone()).unwrap();
         }
 
-        let mut solver = Solver::new(board.clone()).unwrap();
+        let mut solver = Solver::new(&mut board).unwrap();
         let moves = solver.solve().unwrap();
 
         for move_ in moves.iter() {
@@ -208,7 +211,7 @@ mod tests {
             board.add_block(block.clone()).unwrap();
         }
 
-        let mut solver = Solver::new(board).unwrap();
+        let mut solver = Solver::new(&mut board).unwrap();
         let moves = solver.solve().unwrap();
 
         assert_eq!(moves.len(), expected_moves);

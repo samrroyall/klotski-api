@@ -25,39 +25,6 @@ use crate::repositories::board_states::{
 };
 use crate::services::{db::Pool as DbPool, solver::Solver};
 
-fn make_building_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    update_board_state_while_building(board_id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new(&board_state)),
-            )
-        })
-        .map_err(handle_board_state_repository_error)
-        .into_response()
-}
-
-fn make_solving_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    update_board_state_while_solving(board_id, update_fn, pool)
-        .map(|(board_state, next_moves)| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new_with_next_moves(
-                    &board_state,
-                    &next_moves,
-                )),
-            )
-        })
-        .map_err(handle_board_state_repository_error)
-        .into_response()
-}
-
 #[debug_handler]
 pub async fn new(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(&pool)
@@ -84,6 +51,21 @@ pub async fn delete(
 
     delete_board_state(params.board_id, &pool)
         .map(|()| (StatusCode::OK, ()))
+        .map_err(handle_board_state_repository_error)
+        .into_response()
+}
+
+fn make_building_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    update_board_state_while_building(board_id, update_fn, pool)
+        .map(|board_state| {
+            (
+                StatusCode::OK,
+                JsonResponse(BoardResponse::new(&board_state)),
+            )
+        })
         .map_err(handle_board_state_repository_error)
         .into_response()
 }
@@ -115,6 +97,24 @@ pub async fn add_block(
     make_building_update(params.board_id, update_fn, &pool)
 }
 
+fn make_solving_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    update_board_state_while_solving(board_id, update_fn, pool)
+        .map(|(board_state, next_moves)| {
+            (
+                StatusCode::OK,
+                JsonResponse(BoardResponse::new_with_next_moves(
+                    &board_state,
+                    &next_moves,
+                )),
+            )
+        })
+        .map_err(handle_board_state_repository_error)
+        .into_response()
+}
+
 fn change_block(board_id: i32, pool: &DbPool, block_idx: u8, new_block_id: u8) -> Response {
     let update_fn = |board: &mut Board| board.change_block(block_idx, new_block_id);
 
@@ -122,13 +122,7 @@ fn change_block(board_id: i32, pool: &DbPool, block_idx: u8, new_block_id: u8) -
 }
 
 fn move_block(board_id: i32, pool: &DbPool, block_idx: u8, move_: &[Step]) -> Response {
-    let update_fn = |board: &mut Board| {
-        if !board.is_ready_to_solve() {
-            return Err(BoardError::BoardNotReady);
-        }
-
-        board.move_block(block_idx, move_)
-    };
+    let update_fn = |board: &mut Board| board.move_block(block_idx, move_);
 
     make_solving_update(board_id, update_fn, pool)
 }
@@ -177,12 +171,7 @@ pub async fn undo_move(
 
     let params = path_extraction.unwrap().0;
 
-    let update_fn = |board: &mut Board| {
-        if !board.is_ready_to_solve() {
-            return Err(BoardError::BoardNotReady);
-        }
-        board.undo_move()
-    };
+    let update_fn = |board: &mut Board| board.undo_move();
 
     make_solving_update(params.board_id, update_fn, &pool)
 }
@@ -216,7 +205,9 @@ pub async fn solve(
 
     get_board_state(params.board_id, &pool)
         .map_err(handle_board_state_repository_error)
-        .and_then(|board_state| Solver::new(board_state.to_board()).map_err(handle_board_error))
+        .and_then(|board_state| {
+            Solver::new(&mut board_state.to_board()).map_err(handle_board_error)
+        })
         .map(|mut solver| {
             (
                 StatusCode::OK,

@@ -6,12 +6,11 @@ use super::{
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum State {
     Building,
-    ReadyToSolve,
-    Solving,
-    DoneSolving,
+    AlgoSolving,
+    ManualSolving,
 }
 
 #[derive(Debug, Clone)]
@@ -41,6 +40,9 @@ impl Board {
     const WINNING_BLOCK_ID: u8 = 4;
     const WINNING_ROW: u8 = 3;
     const WINNING_COL: u8 = 1;
+
+    // fn (&mut self) -> bool {
+    // }
 
     fn updated_filled_range(&mut self, range: &Vec<(u8, u8)>, value: bool) {
         for (i, j) in range {
@@ -214,6 +216,10 @@ impl Board {
     }
 
     pub fn add_block(&mut self, block: PositionedBlock) -> Result<(), BoardError> {
+        if self.state != State::Building {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         if !self.is_range_empty(&block.range) {
             return Err(BoardError::BlockPlacementInvalid);
         }
@@ -226,6 +232,10 @@ impl Board {
     }
 
     pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
+        if self.state != State::Building {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         let block_idx = usize::from(block_idx);
 
         let block = self
@@ -242,6 +252,10 @@ impl Board {
     }
 
     pub fn change_block(&mut self, block_idx: u8, new_block_id: u8) -> Result<(), BoardError> {
+        if self.state != State::Building {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         let block_idx = usize::from(block_idx);
 
         let block = self
@@ -279,6 +293,10 @@ impl Board {
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
+        if self.state != State::AlgoSolving {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         let block_idx = usize::from(block_idx);
 
         let mut block = self
@@ -299,6 +317,10 @@ impl Board {
     }
 
     pub fn move_block(&mut self, block_idx: u8, move_: &[Step]) -> Result<(), BoardError> {
+        if self.state != State::ManualSolving {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         let block_idx_usize = usize::from(block_idx);
 
         let mut block = self
@@ -318,6 +340,10 @@ impl Board {
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
+        if self.state != State::ManualSolving {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         let opposite_move = self
             .moves
             .pop()
