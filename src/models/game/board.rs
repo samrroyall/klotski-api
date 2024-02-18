@@ -41,8 +41,23 @@ impl Board {
     const WINNING_ROW: u8 = 3;
     const WINNING_COL: u8 = 1;
 
-    // fn (&mut self) -> bool {
-    // }
+    fn is_ready_to_solve(&self) -> bool {
+        let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
+            acc + u8::from(curr.block_id == Self::WINNING_BLOCK_ID)
+        });
+
+        if num_winning_blocks != 1 {
+            return false;
+        }
+
+        let empty_cells = self.filled.iter().fold(0, |acc, row| {
+            acc + row
+                .iter()
+                .fold(0, |acc, &is_filled| acc + u8::from(!is_filled))
+        });
+
+        empty_cells == Self::NUM_EMPTY_CELLS
+    }
 
     fn updated_filled_range(&mut self, range: &Vec<(u8, u8)>, value: bool) {
         for (i, j) in range {
@@ -189,22 +204,27 @@ impl Board {
             .collect()
     }
 
-    pub fn is_ready_to_solve(&self) -> bool {
-        let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
-            acc + u8::from(curr.block_id == Self::WINNING_BLOCK_ID)
-        });
-
-        if num_winning_blocks != 1 {
-            return false;
+    pub fn change_state(&mut self, new_state: State) -> Result<(), BoardError> {
+        if self.state == new_state {
+            return Ok(());
         }
 
-        let empty_cells = self.filled.iter().fold(0, |acc, row| {
-            acc + row
-                .iter()
-                .fold(0, |acc, &is_filled| acc + u8::from(!is_filled))
-        });
+        match new_state {
+            State::AlgoSolving | State::ManualSolving => {
+                if !self.is_ready_to_solve() {
+                    return Err(BoardError::BoardStateInvalid);
+                }
+            }
+            State::Building => {
+                if !self.moves.is_empty() {
+                    return Err(BoardError::BoardStateInvalid);
+                }
+            }
+        }
 
-        empty_cells == Self::NUM_EMPTY_CELLS
+        self.state = new_state;
+
+        Ok(())
     }
 
     pub fn is_solved(&self) -> bool {
@@ -339,6 +359,17 @@ impl Board {
         Ok(())
     }
 
+    pub fn get_next_moves(&self) -> Vec<Vec<FlatMove>> {
+        self.blocks
+            .iter()
+            .map(|block| {
+                let mut moves = self.get_next_moves_for_block(block);
+                moves.dedup();
+                moves
+            })
+            .collect()
+    }
+
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
         if self.state != State::ManualSolving {
             return Err(BoardError::BoardStateInvalid);
@@ -363,17 +394,6 @@ impl Board {
         self.blocks[block_idx] = block;
 
         Ok(())
-    }
-
-    pub fn get_next_moves(&self) -> Vec<Vec<FlatMove>> {
-        self.blocks
-            .iter()
-            .map(|block| {
-                let mut moves = self.get_next_moves_for_block(block);
-                moves.dedup();
-                moves
-            })
-            .collect()
     }
 }
 
@@ -556,6 +576,43 @@ mod tests {
     }
 
     #[test]
+    fn change_state() {
+        let mut board = Board::default();
+
+        assert!(board.change_state(State::Building).is_ok());
+        assert!(board.change_state(State::AlgoSolving).is_err());
+        assert!(board.change_state(State::ManualSolving).is_err());
+
+        let blocks = [
+            PositionedBlock::new(3, 0, 0).unwrap(),
+            PositionedBlock::new(3, 0, 3).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 1).unwrap(),
+            PositionedBlock::new(3, 2, 3).unwrap(),
+            PositionedBlock::new(2, 3, 1).unwrap(),
+            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(1, 4, 3).unwrap(),
+        ];
+
+        for block in blocks.iter() {
+            board.updated_filled_range(&block.range, true);
+            board.blocks.push(block.clone());
+        }
+
+        assert!(board.change_state(State::AlgoSolving).is_ok());
+        assert!(board.change_state(State::Building).is_ok());
+        assert!(board.change_state(State::ManualSolving).is_ok());
+        assert!(board.change_state(State::Building).is_ok());
+        assert!(board.change_state(State::ManualSolving).is_ok());
+
+        let move_ = Move::new(0, vec![Step::Down]).unwrap();
+        board.moves.push(move_);
+
+        assert!(board.change_state(State::Building).is_err());
+    }
+
+    #[test]
     fn is_ready_to_solve() {
         let mut board = Board::default();
         let blocks = [
@@ -669,6 +726,8 @@ mod tests {
         board.updated_filled_range(&block_two.range, true);
         board.blocks.push(block_two);
 
+        board.state = State::AlgoSolving;
+
         assert!(board.move_block_unchecked(0, 1, 0).is_ok());
         assert_eq!(
             board.filled,
@@ -714,6 +773,7 @@ mod tests {
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one);
+        board.state = State::ManualSolving;
 
         assert!(board.move_block(0, &[Step::Right]).is_ok());
 
@@ -769,15 +829,19 @@ mod tests {
     #[test]
     fn undo_move() {
         let mut board = Board::default();
+
         let block = PositionedBlock::new(1, 2, 0).unwrap();
         board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
+
         board.moves = vec![
             Move::new(0, vec![Step::Right]).unwrap(),
             Move::new(0, vec![Step::Down]).unwrap(),
             Move::new(0, vec![Step::Left]).unwrap(),
             Move::new(0, vec![Step::Down]).unwrap(),
         ];
+
+        board.state = State::ManualSolving;
 
         assert!(board.undo_move().is_ok());
         assert_eq!(board.moves.len(), 3);

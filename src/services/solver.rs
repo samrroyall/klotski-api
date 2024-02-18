@@ -113,13 +113,7 @@ impl Solver {
 
 impl Solver {
     pub fn new(start_board: &mut Board) -> Result<Self, BoardError> {
-        if start_board.state != BoardState::AlgoSolving {
-            if start_board.is_ready_to_solve() {
-                start_board.state = BoardState::AlgoSolving;
-            } else {
-                return Err(BoardError::BoardStateInvalid);
-            }
-        }
+        start_board.change_state(BoardState::AlgoSolving)?;
 
         Ok(Self {
             start_board: start_board.clone(),
@@ -162,27 +156,17 @@ mod tests {
         assert!(Solver::new(&mut board).is_err());
     }
 
-    #[test]
-    fn test_solved_board() {
+    fn test_board_is_optimal(blocks: &[PositionedBlock], expected_moves: usize) {
         let mut board = Board::default();
 
-        let blocks = [
-            PositionedBlock::new(2, 0, 0).unwrap(),
-            PositionedBlock::new(2, 0, 2).unwrap(),
-            PositionedBlock::new(2, 1, 0).unwrap(),
-            PositionedBlock::new(2, 1, 2).unwrap(),
-            PositionedBlock::new(2, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(4, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-        ];
-
-        for block in blocks {
-            board.add_block(block).unwrap();
+        for block in blocks.iter() {
+            board.add_block(block.clone()).unwrap();
         }
 
-        assert!(Solver::new(&mut board).is_err());
+        let mut solver = Solver::new(&mut board).unwrap();
+        let moves = solver.solve().unwrap();
+
+        assert_eq!(moves.len(), expected_moves);
     }
 
     fn test_solution_works(blocks: &[PositionedBlock]) {
@@ -204,17 +188,21 @@ mod tests {
         assert!(board.is_solved());
     }
 
-    fn test_board_is_optimal(blocks: &[PositionedBlock], expected_moves: usize) {
-        let mut board = Board::default();
+    #[test]
+    fn test_solved_board() {
+        let blocks = [
+            PositionedBlock::new(2, 0, 0).unwrap(),
+            PositionedBlock::new(2, 0, 2).unwrap(),
+            PositionedBlock::new(2, 1, 0).unwrap(),
+            PositionedBlock::new(2, 1, 2).unwrap(),
+            PositionedBlock::new(2, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 2).unwrap(),
+            PositionedBlock::new(1, 3, 0).unwrap(),
+            PositionedBlock::new(4, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 3).unwrap(),
+        ];
 
-        for block in blocks.iter() {
-            board.add_block(block.clone()).unwrap();
-        }
-
-        let mut solver = Solver::new(&mut board).unwrap();
-        let moves = solver.solve().unwrap();
-
-        assert_eq!(moves.len(), expected_moves);
+        test_board_is_optimal(&blocks, 0);
     }
 
     #[test]
