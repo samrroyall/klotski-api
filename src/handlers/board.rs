@@ -59,7 +59,7 @@ pub async fn alter(
     match body {
         AlterBoardRequest::ChangeBoardState(data) => make_building_update(
             params.board_id,
-            |board: &mut Board| board.change_state(data.new_state),
+            |board: &mut Board| board.change_state(&data.new_state),
             &pool,
         ),
         AlterBoardRequest::UndoMove => make_solving_update(
@@ -86,10 +86,11 @@ pub async fn solve(
         .and_then(|board_state| {
             Solver::new(&mut board_state.to_board()).map_err(handle_board_error)
         })
-        .map(|mut solver| {
+        .and_then(|mut solver| solver.solve().map_err(handle_board_error))
+        .map(|maybe_moves| {
             (
                 StatusCode::OK,
-                JsonResponse(match solver.solve() {
+                JsonResponse(match maybe_moves {
                     Some(moves) => SolveResponse::Solved(SolvedResponse::new(&moves)),
                     None => SolveResponse::UnableToSolve,
                 }),

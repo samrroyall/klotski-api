@@ -10,8 +10,10 @@ use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Building,
+    ReadyToSolve,
     AlgoSolving,
     ManualSolving,
+    Solved,
 }
 
 #[derive(Debug, Clone)]
@@ -205,25 +207,39 @@ impl Board {
             .collect()
     }
 
-    pub fn change_state(&mut self, new_state: State) -> Result<(), BoardError> {
-        if self.state == new_state {
+    pub fn change_state(&mut self, new_state: &State) -> Result<(), BoardError> {
+        if &self.state == new_state {
             return Ok(());
         }
 
-        match new_state {
-            State::AlgoSolving | State::ManualSolving => {
+        match (&self.state, new_state) {
+            (State::Building, State::ReadyToSolve) => {
                 if !self.is_ready_to_solve() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            State::Building => {
+            (State::ReadyToSolve, State::Building | State::ManualSolving | State::AlgoSolving) => {}
+            (State::ManualSolving | State::AlgoSolving, State::ReadyToSolve) => {
                 if !self.moves.is_empty() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
+            (State::ManualSolving | State::AlgoSolving, State::Solved) => {
+                if !self.is_solved() {
+                    return Err(BoardError::BoardStateInvalid);
+                }
+            }
+            (State::Solved, State::ManualSolving) => {
+                if self.is_solved() {
+                    return Err(BoardError::BoardStateInvalid);
+                }
+            }
+            _ => {
+                return Err(BoardError::BoardStateInvalid);
+            }
         }
 
-        self.state = new_state;
+        self.state = new_state.clone();
 
         Ok(())
     }
@@ -238,7 +254,7 @@ impl Board {
 
     pub fn add_block(&mut self, block: PositionedBlock) -> Result<(), BoardError> {
         if self.state != State::Building {
-            return Err(BoardError::BoardStateInvalid);
+            self.change_state(&State::Building)?;
         }
 
         if !self.is_range_empty(&block.range) {
@@ -249,32 +265,14 @@ impl Board {
 
         self.blocks.push(block);
 
-        Ok(())
-    }
-
-    pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
-        if self.state != State::Building {
-            return Err(BoardError::BoardStateInvalid);
-        }
-
-        let block_idx = usize::from(block_idx);
-
-        let block = self
-            .blocks
-            .get(block_idx)
-            .cloned()
-            .ok_or(BoardError::BlockIndexOutOfBounds)?;
-
-        self.updated_filled_range(&block.range, false);
-
-        self.blocks.swap_remove(block_idx);
+        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
 
         Ok(())
     }
 
     pub fn change_block(&mut self, block_idx: u8, new_block_id: u8) -> Result<(), BoardError> {
         if self.state != State::Building {
-            return Err(BoardError::BoardStateInvalid);
+            self.change_state(&State::Building)?;
         }
 
         let block_idx = usize::from(block_idx);
@@ -305,6 +303,32 @@ impl Board {
 
         self.blocks[block_idx] = new_block;
 
+        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+
+        Ok(())
+    }
+
+    pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
+        if self.state != State::Building {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
+        let block_idx = usize::from(block_idx);
+
+        let block = self
+            .blocks
+            .get(block_idx)
+            .cloned()
+            .ok_or(BoardError::BlockIndexOutOfBounds)?;
+
+        self.updated_filled_range(&block.range, false);
+
+        self.blocks.swap_remove(block_idx);
+
+        if self.state == State::ReadyToSolve {
+            self.change_state(&State::Building)?;
+        }
+
         Ok(())
     }
 
@@ -315,7 +339,7 @@ impl Board {
         col_diff: i8,
     ) -> Result<(), BoardError> {
         if self.state != State::AlgoSolving {
-            return Err(BoardError::BoardStateInvalid);
+            self.change_state(&State::AlgoSolving)?;
         }
 
         let block_idx = usize::from(block_idx);
@@ -334,12 +358,14 @@ impl Board {
 
         self.blocks[block_idx] = block;
 
+        let _board_is_solved = self.change_state(&State::Solved).is_ok();
+
         Ok(())
     }
 
     pub fn move_block(&mut self, block_idx: u8, move_: &[Step]) -> Result<(), BoardError> {
         if self.state != State::ManualSolving {
-            return Err(BoardError::BoardStateInvalid);
+            self.change_state(&State::ManualSolving)?;
         }
 
         let block_idx_usize = usize::from(block_idx);
@@ -357,22 +383,29 @@ impl Board {
         self.moves
             .push(Move::new(block_idx, move_.to_vec()).unwrap());
 
+        let _board_is_solved = self.change_state(&State::Solved).is_ok();
+
         Ok(())
     }
 
-    pub fn get_next_moves(&self) -> Vec<Vec<FlatMove>> {
-        self.blocks
+    pub fn get_next_moves(&self) -> Result<Vec<Vec<FlatMove>>, BoardError> {
+        if self.state != State::ManualSolving && self.state != State::AlgoSolving {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
+        Ok(self
+            .blocks
             .iter()
             .map(|block| {
                 let mut moves = self.get_next_moves_for_block(block);
                 moves.dedup();
                 moves
             })
-            .collect()
+            .collect())
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
-        if self.state != State::ManualSolving {
+        if self.state != State::ManualSolving && self.state != State::Solved {
             return Err(BoardError::BoardStateInvalid);
         }
 
@@ -393,6 +426,10 @@ impl Board {
         self.do_move(&mut block, opposite_move.steps.as_slice())?;
 
         self.blocks[block_idx] = block;
+
+        if self.state == State::Solved {
+            self.change_state(&State::ManualSolving)?;
+        }
 
         Ok(())
     }
@@ -580,9 +617,9 @@ mod tests {
     fn change_state() {
         let mut board = Board::default();
 
-        assert!(board.change_state(State::Building).is_ok());
-        assert!(board.change_state(State::AlgoSolving).is_err());
-        assert!(board.change_state(State::ManualSolving).is_err());
+        assert!(board.change_state(&State::Building).is_ok());
+        assert!(board.change_state(&State::AlgoSolving).is_err());
+        assert!(board.change_state(&State::ManualSolving).is_err());
 
         let blocks = [
             PositionedBlock::new(3, 0, 0).unwrap(),
@@ -601,16 +638,18 @@ mod tests {
             board.blocks.push(block.clone());
         }
 
-        assert!(board.change_state(State::AlgoSolving).is_ok());
-        assert!(board.change_state(State::Building).is_ok());
-        assert!(board.change_state(State::ManualSolving).is_ok());
-        assert!(board.change_state(State::Building).is_ok());
-        assert!(board.change_state(State::ManualSolving).is_ok());
+        assert!(board.change_state(&State::AlgoSolving).is_err());
+        assert!(board.change_state(&State::ReadyToSolve).is_ok());
+        assert!(board.change_state(&State::Building).is_ok());
+        assert!(board.change_state(&State::ManualSolving).is_err());
+        assert!(board.change_state(&State::ReadyToSolve).is_ok());
+        assert!(board.change_state(&State::ManualSolving).is_ok());
 
         let move_ = Move::new(0, vec![Step::Down]).unwrap();
         board.moves.push(move_);
 
-        assert!(board.change_state(State::Building).is_err());
+        assert!(board.change_state(&State::ReadyToSolve).is_err());
+        assert!(board.change_state(&State::Building).is_err());
     }
 
     #[test]
@@ -789,10 +828,16 @@ mod tests {
             ]
         );
 
-        assert!(board.move_block(0, &[Step::Up]).is_err());
+        assert_eq!(
+            board.move_block(0, &[Step::Up]),
+            Err(BoardError::BlockPlacementInvalid)
+        );
         assert!(board.move_block(0, &[Step::Left]).is_ok());
         assert!(board.move_block(0, &[Step::Down]).is_ok());
-        assert!(board.move_block(0, &[Step::Left]).is_err());
+        assert_eq!(
+            board.move_block(0, &[Step::Left]),
+            Err(BoardError::BlockPlacementInvalid)
+        );
 
         let block_two = PositionedBlock::new(4, 3, 2).unwrap();
         board.updated_filled_range(&block_two.range, true);
@@ -809,11 +854,23 @@ mod tests {
             ]
         );
 
-        assert!(board.move_block(1, &[Step::Right]).is_err());
-        assert!(board.move_block(1, &[Step::Down]).is_err());
+        assert_eq!(
+            board.move_block(1, &[Step::Right]),
+            Err(BoardError::BlockPlacementInvalid)
+        );
+        assert_eq!(
+            board.move_block(1, &[Step::Down]),
+            Err(BoardError::BlockPlacementInvalid)
+        );
         assert!(board.move_block(1, &[Step::Left]).is_ok());
+
+        board.state = State::ManualSolving;
+
         assert!(board.move_block(1, &[Step::Up, Step::Up]).is_ok());
-        assert!(board.move_block(1, &[Step::Left]).is_err());
+        assert_eq!(
+            board.move_block(1, &[Step::Left]),
+            Err(BoardError::BlockPlacementInvalid)
+        );
 
         assert_eq!(
             board.filled,
@@ -925,7 +982,12 @@ mod tests {
         for block in blocks {
             board.add_block(block).unwrap();
         }
-        let next_moves = board.get_next_moves();
+
+        assert_eq!(board.state, State::ReadyToSolve);
+
+        assert!(board.change_state(&State::ManualSolving).is_ok());
+
+        let next_moves = board.get_next_moves().unwrap();
 
         assert_eq!(next_moves.iter().fold(0, |acc, moves| acc + moves.len()), 8);
 

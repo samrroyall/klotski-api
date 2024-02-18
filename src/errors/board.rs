@@ -1,7 +1,7 @@
 use std::error;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     BlockIndexOutOfBounds,
     BlockInvalid,

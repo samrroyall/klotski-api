@@ -50,12 +50,17 @@ impl Solver {
         }
     }
 
-    fn get_children(&mut self, parent_node: &Rc<RefCell<TreeNode>>) -> Vec<TreeNode> {
+    fn get_children(
+        &mut self,
+        parent_node: &Rc<RefCell<TreeNode>>,
+    ) -> Result<Vec<TreeNode>, BoardError> {
         let mut children = vec![];
 
         let board = parent_node.borrow().board.clone();
 
-        for (block_idx, moves) in (0u8..).zip(board.get_next_moves()) {
+        let next_moves = board.get_next_moves()?;
+
+        for (block_idx, moves) in (0u8..).zip(next_moves) {
             for move_ in moves {
                 let child_move = FlatBoardMove::new(block_idx, &move_);
 
@@ -81,10 +86,10 @@ impl Solver {
             }
         }
 
-        children
+        Ok(children)
     }
 
-    fn bfs(&mut self, root: TreeNode) -> Option<Rc<RefCell<TreeNode>>> {
+    fn bfs(&mut self, root: TreeNode) -> Result<Option<Rc<RefCell<TreeNode>>>, BoardError> {
         let root_cell = Rc::new(RefCell::new(root));
 
         self.seen.insert(root_cell.borrow().board.hash());
@@ -98,22 +103,24 @@ impl Solver {
                 let node = queue.pop_front().unwrap();
 
                 if node.borrow().board.is_solved() {
-                    return Some(node.clone());
+                    return Ok(Some(node.clone()));
                 }
 
-                for child in self.get_children(&node) {
+                let children = self.get_children(&node)?;
+
+                for child in children {
                     queue.push_back(Rc::new(RefCell::new(child)));
                 }
             }
         }
 
-        None
+        Ok(None)
     }
 }
 
 impl Solver {
     pub fn new(start_board: &mut Board) -> Result<Self, BoardError> {
-        start_board.change_state(BoardState::AlgoSolving)?;
+        start_board.change_state(&BoardState::AlgoSolving)?;
 
         Ok(Self {
             start_board: start_board.clone(),
@@ -121,13 +128,13 @@ impl Solver {
         })
     }
 
-    pub fn solve(&mut self) -> Option<Vec<FlatBoardMove>> {
+    pub fn solve(&mut self) -> Result<Option<Vec<FlatBoardMove>>, BoardError> {
         let root_node = TreeNode::from_board(self.start_board.clone());
 
         self.bfs(root_node).map(|tail_node| {
             let mut moves = vec![];
 
-            let mut maybe_node = Some(tail_node);
+            let mut maybe_node = Some(tail_node)?;
 
             while let Some(node) = maybe_node {
                 let mut node = node.borrow_mut();
@@ -139,7 +146,7 @@ impl Solver {
                 maybe_node = node.parent.take();
             }
 
-            moves.into_iter().rev().collect()
+            Some(moves.into_iter().rev().collect())
         })
     }
 }
@@ -164,7 +171,7 @@ mod tests {
         }
 
         let mut solver = Solver::new(&mut board).unwrap();
-        let moves = solver.solve().unwrap();
+        let moves = solver.solve().unwrap().unwrap();
 
         assert_eq!(moves.len(), expected_moves);
     }
@@ -177,7 +184,7 @@ mod tests {
         }
 
         let mut solver = Solver::new(&mut board).unwrap();
-        let moves = solver.solve().unwrap();
+        let moves = solver.solve().unwrap().unwrap();
 
         for move_ in moves.iter() {
             board

@@ -119,7 +119,7 @@ where
 {
     let updated_board = get_updated(search_id, update_fn, pool)?;
 
-    let next_moves = updated_board.get_next_moves();
+    let next_moves = updated_board.get_next_moves()?;
 
     let new_board_state = InsertableBoard::from(&updated_board);
 
