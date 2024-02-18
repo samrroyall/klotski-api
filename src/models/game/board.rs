@@ -7,6 +7,7 @@ use super::{
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
 pub enum State {
     Building,
     AlgoSolving,

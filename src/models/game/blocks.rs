@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 use super::{moves::Step, utils::Position};
 use crate::errors::board::Error as BoardError;
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone)]
 enum Block {
     OneByOne,
     OneByTwo,
