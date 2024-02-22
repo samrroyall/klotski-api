@@ -8,8 +8,9 @@ use crate::models::{
 #[derive(Debug, Serialize)]
 pub struct Board {
     id: i32,
-    blocks: String,
     state: String,
+    blocks: String,
+    filled: String,
     next_moves: Option<String>,
 }
 
@@ -17,8 +18,9 @@ impl Board {
     pub fn new(board_record: &SelectableBoard) -> Self {
         Self {
             id: board_record.id,
-            blocks: board_record.blocks.clone(),
             state: board_record.state.clone(),
+            blocks: board_record.blocks.clone(),
+            filled: board_record.filled.clone(),
             next_moves: None,
         }
     }
@@ -29,8 +31,9 @@ impl Board {
     ) -> Self {
         Self {
             id: board_record.id,
-            blocks: board_record.blocks.clone(),
             state: board_record.state.clone(),
+            blocks: board_record.blocks.clone(),
+            filled: board_record.filled.clone(),
             next_moves: Some(serde_json::to_string(next_moves).unwrap()),
         }
     }
