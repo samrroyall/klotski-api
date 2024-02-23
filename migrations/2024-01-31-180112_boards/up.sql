@@ -4,5 +4,6 @@ CREATE TABLE boards (
     state  VARCHAR(20) NOT NULL,
     blocks TEXT NOT NULL,
     filled TEXT NOT NULL,
-    moves  TEXT NOT NULL
+    moves  TEXT NOT NULL,
+    next_moves  TEXT NOT NULL
 )
