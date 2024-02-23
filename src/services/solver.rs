@@ -31,11 +31,7 @@ impl Solver {
                     for move_ in moves {
                         let mut child_board = curr_board.clone();
 
-                        child_board.move_block(
-                            u8::try_from(block_idx).unwrap(),
-                            move_.row_diff,
-                            move_.col_diff,
-                        )?;
+                        child_board.move_block(block_idx, move_.row_diff, move_.col_diff)?;
 
                         if child_board.state == BoardState::Solved {
                             return Ok(Some(child_board));

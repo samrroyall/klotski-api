@@ -41,7 +41,7 @@ impl Step {
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Move {
-    pub block_idx: u8,
+    pub block_idx: usize,
     pub steps: Vec<Step>,
 }
 
@@ -74,13 +74,13 @@ impl FlatMove {
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlatBoardMove {
-    pub block_idx: u8,
+    pub block_idx: usize,
     pub row_diff: i8,
     pub col_diff: i8,
 }
 
 impl FlatBoardMove {
-    pub fn new(block_idx: u8, move_: &FlatMove) -> Self {
+    pub fn new(block_idx: usize, move_: &FlatMove) -> Self {
         Self {
             block_idx,
             row_diff: move_.row_diff,
@@ -128,5 +128,36 @@ mod tests {
         assert_eq!(flat_move_two.col_diff, -1);
 
         assert_eq!(flat_move_one, flat_move_two);
+
+        let flat_move_three = FlatMove::from_steps(&[Step::Down, Step::Right]);
+
+        assert!(flat_move_three.is_opposite(&flat_move_one));
+        assert!(flat_move_three.is_opposite(&flat_move_two));
+    }
+
+    #[test]
+    fn flat_board_move() {
+        let flat_move_one = FlatMove::from_steps(&[Step::Up, Step::Left]);
+        let flat_board_move_one = FlatBoardMove::new(0, &flat_move_one);
+
+        assert_eq!(flat_board_move_one.row_diff, -1);
+        assert_eq!(flat_board_move_one.col_diff, -1);
+
+        let flat_move_two = FlatMove::from_steps(&[Step::Left, Step::Up]);
+        let flat_board_move_two = FlatBoardMove::new(0, &flat_move_two);
+
+        assert_eq!(flat_board_move_two.row_diff, -1);
+        assert_eq!(flat_board_move_two.col_diff, -1);
+
+        assert_eq!(flat_board_move_one, flat_board_move_two);
+
+        let flat_move_three = FlatMove::from_steps(&[Step::Down, Step::Right]);
+        let flat_board_move_three = FlatBoardMove::new(0, &flat_move_three);
+
+        assert!(flat_board_move_three.is_opposite(&flat_board_move_one));
+        assert!(flat_board_move_three.is_opposite(&flat_board_move_two));
+
+        assert_eq!(flat_board_move_three.opposite(), flat_board_move_one);
+        assert_eq!(flat_board_move_three.opposite(), flat_board_move_two);
     }
 }

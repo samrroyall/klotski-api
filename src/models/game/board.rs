@@ -264,12 +264,10 @@ impl Board {
         Ok(())
     }
 
-    pub fn change_block(&mut self, block_idx: u8, new_block_id: u8) -> Result<(), BoardError> {
+    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(&State::Building)?;
         }
-
-        let block_idx = usize::from(block_idx);
 
         let block = self
             .blocks
@@ -304,12 +302,10 @@ impl Board {
         Ok(())
     }
 
-    pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
+    pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
         if self.state != State::Building {
             return Err(BoardError::BoardStateInvalid);
         }
-
-        let block_idx = usize::from(block_idx);
 
         let block = self
             .blocks
@@ -330,7 +326,7 @@ impl Board {
 
     pub fn move_block(
         &mut self,
-        block_idx: u8,
+        block_idx: usize,
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
@@ -338,12 +334,10 @@ impl Board {
             self.change_state(&State::ManualSolving)?;
         }
 
-        let block_idx_usize = usize::from(block_idx);
-
         if self.state == State::ManualSolving {
             let is_valid_move = self
                 .next_moves
-                .get(block_idx_usize)
+                .get(block_idx)
                 .unwrap()
                 .iter()
                 .any(|move_| move_.row_diff == row_diff && move_.col_diff == col_diff);
@@ -355,7 +349,7 @@ impl Board {
 
         let mut block = self
             .blocks
-            .get(block_idx_usize)
+            .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
@@ -369,7 +363,7 @@ impl Board {
 
         self.updated_filled_range(&block.range, true);
 
-        self.blocks[block_idx_usize] = block;
+        self.blocks[block_idx] = block;
 
         self.moves.push(FlatBoardMove::new(
             block_idx,
@@ -396,11 +390,9 @@ impl Board {
             .ok_or(BoardError::NoMovesToUndo)?
             .opposite();
 
-        let block_idx = usize::from(opposite_move.block_idx);
-
         let mut block = self
             .blocks
-            .get(block_idx)
+            .get(opposite_move.block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
@@ -417,7 +409,7 @@ impl Board {
 
         self.updated_filled_range(&block.range, true);
 
-        self.blocks[block_idx] = block;
+        self.blocks[opposite_move.block_idx] = block;
 
         if self.state == State::Solved {
             let _board_is_no_longer_solved = self.change_state(&State::ManualSolving).is_ok();

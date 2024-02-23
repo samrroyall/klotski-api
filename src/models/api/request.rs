@@ -10,7 +10,7 @@ pub struct BoardParams {
 #[derive(Debug, Deserialize)]
 pub struct BlockParams {
     pub board_id: i32,
-    pub block_idx: u8,
+    pub block_idx: usize,
 }
 
 #[derive(Debug, Deserialize)]
