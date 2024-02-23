@@ -1,6 +1,4 @@
-use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
-use std::rc::Rc;
 
 use crate::errors::board::Error as BoardError;
 use crate::models::game::{
@@ -8,108 +6,51 @@ use crate::models::game::{
     moves::FlatBoardMove,
 };
 
-type Edge = Rc<RefCell<TreeNode>>;
-
-#[derive(Debug, Clone)]
-struct TreeNode {
-    parent: Option<Edge>,
-    move_: FlatBoardMove,
-    board: Board,
-}
-
-impl TreeNode {
-    pub fn new(parent: Option<Edge>, move_: FlatBoardMove, board: Board) -> Self {
-        Self {
-            parent,
-            move_,
-            board,
-        }
-    }
-
-    pub fn from_board(board: Board) -> Self {
-        Self {
-            parent: None,
-            move_: FlatBoardMove::default(),
-            board,
-        }
-    }
-}
-
 pub struct Solver {
     start_board: Board,
     seen: HashSet<String>,
 }
 
 impl Solver {
-    fn upsert_hash(&mut self, board_hash: String) -> bool {
-        if self.seen.contains(&board_hash) {
-            false
-        } else {
-            self.seen.insert(board_hash);
-            true
-        }
-    }
+    fn bfs(&mut self) -> Result<Option<Board>, BoardError> {
+        let root = self.start_board.clone();
 
-    fn get_children(
-        &mut self,
-        parent_node: &Rc<RefCell<TreeNode>>,
-    ) -> Result<Vec<TreeNode>, BoardError> {
-        let mut children = vec![];
-
-        let board = parent_node.borrow().board.clone();
-
-        let next_moves = board.get_next_moves()?;
-
-        for (block_idx, moves) in (0u8..).zip(next_moves) {
-            for move_ in moves {
-                let child_move = FlatBoardMove::new(block_idx, &move_);
-
-                if child_move.is_opposite(&parent_node.borrow().move_) {
-                    continue;
-                }
-
-                let mut child_board = board.clone();
-
-                child_board
-                    .move_block_unchecked(block_idx, move_.row_diff, move_.col_diff)
-                    .unwrap();
-
-                if !self.upsert_hash(child_board.hash()) {
-                    continue;
-                }
-
-                children.push(TreeNode::new(
-                    Some(parent_node.clone()),
-                    child_move,
-                    child_board,
-                ));
-            }
+        if root.is_solved() {
+            return Ok(Some(root));
         }
 
-        Ok(children)
-    }
-
-    fn bfs(&mut self, root: TreeNode) -> Result<Option<Rc<RefCell<TreeNode>>>, BoardError> {
-        let root_cell = Rc::new(RefCell::new(root));
-
-        self.seen.insert(root_cell.borrow().board.hash());
-
-        let mut queue = VecDeque::from([root_cell]);
+        let mut queue: VecDeque<Board> = VecDeque::from([root]);
 
         while !queue.is_empty() {
             let queue_size = queue.len();
 
             for _ in 0..queue_size {
-                let node = queue.pop_front().unwrap();
+                let curr_board = queue.pop_front().unwrap();
 
-                if node.borrow().board.is_solved() {
-                    return Ok(Some(node.clone()));
-                }
+                for (block_idx, moves) in curr_board.next_moves.iter().enumerate() {
+                    for move_ in moves {
+                        let mut child_board = curr_board.clone();
 
-                let children = self.get_children(&node)?;
+                        child_board.move_block(
+                            u8::try_from(block_idx).unwrap(),
+                            move_.row_diff,
+                            move_.col_diff,
+                        )?;
 
-                for child in children {
-                    queue.push_back(Rc::new(RefCell::new(child)));
+                        if child_board.state == BoardState::Solved {
+                            return Ok(Some(child_board));
+                        }
+
+                        let hash = child_board.hash();
+
+                        if self.seen.contains(&hash) {
+                            continue;
+                        }
+
+                        self.seen.insert(hash);
+
+                        queue.push_back(child_board);
+                    }
                 }
             }
         }
@@ -129,25 +70,13 @@ impl Solver {
     }
 
     pub fn solve(&mut self) -> Result<Option<Vec<FlatBoardMove>>, BoardError> {
-        let root_node = TreeNode::from_board(self.start_board.clone());
+        let maybe_solved_board = self.bfs()?;
 
-        self.bfs(root_node).map(|tail_node| {
-            let mut moves = vec![];
+        if let Some(solved_board) = maybe_solved_board {
+            return Ok(Some(solved_board.moves));
+        }
 
-            let mut maybe_node = Some(tail_node)?;
-
-            while let Some(node) = maybe_node {
-                let mut node = node.borrow_mut();
-
-                if node.parent.is_some() {
-                    moves.push(node.move_.clone());
-                }
-
-                maybe_node = node.parent.take();
-            }
-
-            Some(moves.into_iter().rev().collect())
-        })
+        Ok(None)
     }
 }
 
@@ -188,7 +117,7 @@ mod tests {
 
         for move_ in moves.iter() {
             board
-                .move_block_unchecked(move_.block_idx, move_.row_diff, move_.col_diff)
+                .move_block(move_.block_idx, move_.row_diff, move_.col_diff)
                 .unwrap();
         }
 
