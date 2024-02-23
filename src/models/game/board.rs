@@ -419,6 +419,14 @@ impl Board {
 
         Ok(())
     }
+
+    pub fn reset(&mut self) -> Result<(), BoardError> {
+        while !self.moves.is_empty() {
+            self.undo_move()?;
+        }
+
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -956,5 +964,34 @@ mod tests {
         );
 
         assert!(board.undo_move().is_err());
+    }
+
+    #[test]
+    fn reset() {
+        let mut board = Board::default();
+
+        let block = PositionedBlock::new(1, 2, 0).unwrap();
+        board.updated_filled_range(&block.range, true);
+        board.blocks.push(block);
+        board.state = State::ManualSolving;
+        board.moves = vec![
+            FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(0, -1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
+        ];
+        board.next_moves = vec![vec![
+            FlatMove::new(-1, 0).unwrap(),
+            FlatMove::new(-2, 0).unwrap(),
+            FlatMove::new(1, 0).unwrap(),
+            FlatMove::new(2, 0).unwrap(),
+            FlatMove::new(0, 1).unwrap(),
+            FlatMove::new(0, 2).unwrap(),
+            FlatMove::new(-1, 1).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+        ]];
+
+        assert!(board.reset().is_ok());
+        assert_eq!(board.moves.len(), 0);
     }
 }

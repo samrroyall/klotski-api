@@ -71,7 +71,7 @@ pub async fn alter(
     let body = json_extraction.unwrap().0;
 
     match body {
-        AlterBoardRequest::ChangeBoardState(data) => update(
+        AlterBoardRequest::ChangeState(data) => update(
             params.board_id,
             |board: &mut Board| board.change_state(&data.new_state),
             &pool,
@@ -81,6 +81,9 @@ pub async fn alter(
             |board: &mut Board| board.undo_move(),
             &pool,
         ),
+        AlterBoardRequest::Reset => {
+            update(params.board_id, |board: &mut Board| board.reset(), &pool)
+        }
     }
 }
 

@@ -46,6 +46,7 @@ pub struct ChangeState {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AlterBoard {
-    ChangeBoardState(ChangeState),
+    ChangeState(ChangeState),
+    Reset,
     UndoMove,
 }
