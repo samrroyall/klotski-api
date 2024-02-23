@@ -1,9 +1,6 @@
 use serde::Serialize;
 
-use crate::models::{
-    db::tables::SelectableBoard,
-    game::moves::{FlatBoardMove, FlatMove},
-};
+use crate::models::{db::tables::SelectableBoard, game::moves::FlatBoardMove};
 
 #[derive(Debug, Serialize)]
 pub struct Board {
@@ -11,7 +8,7 @@ pub struct Board {
     state: String,
     blocks: String,
     filled: String,
-    next_moves: Option<String>,
+    next_moves: String,
 }
 
 impl Board {
@@ -21,20 +18,7 @@ impl Board {
             state: board_record.state.clone(),
             blocks: board_record.blocks.clone(),
             filled: board_record.filled.clone(),
-            next_moves: None,
-        }
-    }
-
-    pub fn new_with_next_moves(
-        board_record: &SelectableBoard,
-        next_moves: &Vec<Vec<FlatMove>>,
-    ) -> Self {
-        Self {
-            id: board_record.id,
-            state: board_record.state.clone(),
-            blocks: board_record.blocks.clone(),
-            filled: board_record.filled.clone(),
-            next_moves: Some(serde_json::to_string(next_moves).unwrap()),
+            next_moves: board_record.next_moves.clone(),
         }
     }
 }
