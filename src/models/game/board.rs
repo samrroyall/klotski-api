@@ -11,8 +11,7 @@ use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 pub enum State {
     Building,
     ReadyToSolve,
-    AlgoSolving,
-    ManualSolving,
+    Solving,
     Solved,
 }
 
@@ -210,18 +209,18 @@ impl Board {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::ReadyToSolve, State::Building | State::ManualSolving | State::AlgoSolving) => {}
-            (State::ManualSolving | State::AlgoSolving, State::ReadyToSolve) => {
+            (State::ReadyToSolve, State::Building | State::Solving) => {}
+            (State::Solving, State::ReadyToSolve) => {
                 if !self.moves.is_empty() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::ManualSolving | State::AlgoSolving, State::Solved) => {
+            (State::Solving, State::Solved) => {
                 if !self.is_solved() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::Solved, State::AlgoSolving | State::ManualSolving) => {
+            (State::Solved, State::Solving) => {
                 if self.is_solved() {
                     return Err(BoardError::BoardStateInvalid);
                 }
@@ -330,11 +329,11 @@ impl Board {
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
-        if self.state != State::ManualSolving && self.state != State::AlgoSolving {
-            self.change_state(&State::ManualSolving)?;
+        if self.state != State::Solving {
+            self.change_state(&State::Solving)?;
         }
 
-        if self.state == State::ManualSolving {
+        if self.state == State::Solving {
             let is_valid_move = self
                 .next_moves
                 .get(block_idx)
@@ -380,7 +379,7 @@ impl Board {
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
-        if self.state != State::ManualSolving && self.state != State::Solved {
+        if ![State::Solving, State::Solved].contains(&self.state) {
             return Err(BoardError::BoardStateInvalid);
         }
 
@@ -412,7 +411,7 @@ impl Board {
         self.blocks[opposite_move.block_idx] = block;
 
         if self.state == State::Solved {
-            let _board_is_no_longer_solved = self.change_state(&State::ManualSolving).is_ok();
+            let _board_is_no_longer_solved = self.change_state(&State::Solving).is_ok();
         }
 
         self.update_next_moves();
@@ -424,6 +423,8 @@ impl Board {
         while !self.moves.is_empty() {
             self.undo_move()?;
         }
+
+        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
 
         Ok(())
     }
@@ -606,7 +607,7 @@ mod tests {
 
         assert_eq!(board.state, State::ReadyToSolve);
 
-        assert!(board.change_state(&State::ManualSolving).is_ok());
+        assert!(board.change_state(&State::Solving).is_ok());
 
         assert_eq!(
             board
@@ -660,8 +661,7 @@ mod tests {
         let mut board = Board::default();
 
         assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::AlgoSolving).is_err());
-        assert!(board.change_state(&State::ManualSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
 
         let blocks = [
             PositionedBlock::new(3, 0, 0).unwrap(),
@@ -680,12 +680,12 @@ mod tests {
             board.blocks.push(block.clone());
         }
 
-        assert!(board.change_state(&State::AlgoSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
         assert!(board.change_state(&State::ReadyToSolve).is_ok());
         assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::ManualSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
         assert!(board.change_state(&State::ReadyToSolve).is_ok());
-        assert!(board.change_state(&State::ManualSolving).is_ok());
+        assert!(board.change_state(&State::Solving).is_ok());
 
         let move_ = FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap());
         board.moves.push(move_);
@@ -803,7 +803,7 @@ mod tests {
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one);
-        board.state = State::ManualSolving;
+        board.state = State::Solving;
         board.next_moves = vec![vec![
             FlatMove::new(0, 1).unwrap(),
             FlatMove::new(0, 2).unwrap(),
@@ -893,7 +893,7 @@ mod tests {
         let block = PositionedBlock::new(1, 2, 0).unwrap();
         board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
-        board.state = State::ManualSolving;
+        board.state = State::Solving;
         board.moves = vec![
             FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
             FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
@@ -973,7 +973,7 @@ mod tests {
         let block = PositionedBlock::new(1, 2, 0).unwrap();
         board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
-        board.state = State::ManualSolving;
+        board.state = State::Solving;
         board.moves = vec![
             FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
             FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),

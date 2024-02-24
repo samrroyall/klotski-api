@@ -57,7 +57,7 @@ impl Solver {
 
 impl Solver {
     pub fn new(start_board: &mut Board) -> Result<Self, BoardError> {
-        start_board.change_state(&BoardState::AlgoSolving)?;
+        start_board.change_state(&BoardState::Solving)?;
 
         Ok(Self {
             start_board: start_board.clone(),
