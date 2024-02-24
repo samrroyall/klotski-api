@@ -15,10 +15,10 @@ impl Position {
 
     pub fn new(row: u8, col: u8) -> Option<Self> {
         if row <= Self::MAX_ROW && col <= Self::MAX_COL {
-            Some(Self { row, col })
-        } else {
-            None
+            return Some(Self { row, col });
         }
+
+        None
     }
 
     pub fn move_by(&mut self, row_diff: i8, col_diff: i8) -> Result<(), BoardError> {

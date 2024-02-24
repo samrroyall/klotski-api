@@ -52,12 +52,14 @@ pub struct FlatMove {
 }
 
 impl FlatMove {
+    const MAX_DIFF: u8 = Board::NUM_EMPTY_CELLS;
+
     pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
-        if row_diff.abs() + col_diff.abs() > i8::try_from(Board::NUM_EMPTY_CELLS).unwrap() {
-            return None;
+        if u8::try_from(row_diff.abs() + col_diff.abs()).unwrap() <= Self::MAX_DIFF {
+            return Some(Self { row_diff, col_diff });
         }
 
-        Some(Self { row_diff, col_diff })
+        None
     }
 
     pub fn from_steps(steps: &[Step]) -> Self {
