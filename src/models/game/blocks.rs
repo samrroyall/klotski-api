@@ -93,7 +93,7 @@ impl Positioned {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{board::Board, moves::Step};
+    use crate::models::game::{moves::Step, utils::Position};
 
     #[test]
     fn valid_blocks() {
@@ -114,15 +114,15 @@ mod tests {
     fn valid_positioned_blocks() {
         assert!(
             Positioned::new(1, 0, 0).is_some()
-                && Positioned::new(1, Board::ROWS - 1, Board::COLS - 1).is_some()
+                && Positioned::new(1, Position::MAX_ROW, Position::MAX_COL).is_some()
         );
     }
 
     #[test]
     fn invalid_positioned_blocks() {
         assert!(
-            Positioned::new(4, Board::ROWS - 1, Board::COLS - 1).is_none()
-                && Positioned::new(1, 0, Board::COLS).is_none()
+            Positioned::new(4, Position::MAX_ROW, Position::MAX_COL).is_none()
+                && Positioned::new(1, 0, Position::MAX_COL + 1).is_none()
         );
     }
 

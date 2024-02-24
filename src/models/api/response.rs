@@ -7,7 +7,7 @@ pub struct Board {
     id: i32,
     state: String,
     blocks: String,
-    filled: String,
+    grid: String,
     next_moves: String,
 }
 
@@ -17,7 +17,7 @@ impl Board {
             id: board_record.id,
             state: board_record.state.clone(),
             blocks: board_record.blocks.clone(),
-            filled: board_record.filled.clone(),
+            grid: board_record.grid.clone(),
             next_moves: board_record.next_moves.clone(),
         }
     }

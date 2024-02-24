@@ -10,8 +10,11 @@ pub struct Position {
 }
 
 impl Position {
+    pub const MAX_ROW: u8 = Board::ROWS - 1;
+    pub const MAX_COL: u8 = Board::COLS - 1;
+
     pub fn new(row: u8, col: u8) -> Option<Self> {
-        if row < Board::ROWS && col < Board::COLS {
+        if row <= Self::MAX_ROW && col <= Self::MAX_COL {
             Some(Self { row, col })
         } else {
             None
@@ -24,7 +27,7 @@ impl Position {
         let new_col = u8::try_from(i8::try_from(self.col).unwrap() + col_diff)
             .map_err(|_| BoardError::BlockPlacementInvalid)?;
 
-        if new_row >= Board::ROWS || new_col >= Board::COLS {
+        if new_row > Self::MAX_ROW || new_col > Self::MAX_COL {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
@@ -38,18 +41,20 @@ impl Position {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::board::Board;
 
     #[test]
     fn valid_positions() {
         assert!(
             Position::new(0, 0).is_some()
-                && Position::new(Board::ROWS - 1, Board::COLS - 1).is_some()
+                && Position::new(Position::MAX_ROW, Position::MAX_COL).is_some()
         );
     }
 
     #[test]
     fn invalid_positions() {
-        assert!(Position::new(Board::ROWS, 0).is_none() && Position::new(0, Board::COLS).is_none());
+        assert!(
+            Position::new(Position::MAX_ROW + 1, 0).is_none()
+                && Position::new(0, Position::MAX_COL + 1).is_none()
+        );
     }
 }

@@ -6,7 +6,7 @@ diesel::table! {
         #[max_length = 20]
         state -> Varchar,
         blocks -> Text,
-        filled -> Text,
+        grid -> Text,
         moves -> Text,
         next_moves -> Text,
     }
