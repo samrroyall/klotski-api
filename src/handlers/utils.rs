@@ -15,9 +15,10 @@ pub fn handle_board_error(e: BoardError) -> HttpError {
     match e {
         BoardError::BlockIndexOutOfBounds
         | BoardError::BlockInvalid
-        | BoardError::BlockPlacementInvalid
-        | BoardError::NoMovesToUndo => HttpError::BadRequest(e.to_string()),
-        BoardError::BoardStateInvalid => HttpError::NotAllowed(e.to_string()),
+        | BoardError::BlockPlacementInvalid => HttpError::BadRequest(e.to_string()),
+        BoardError::BoardStateInvalid | BoardError::NoMovesToUndo => {
+            HttpError::Forbidden(e.to_string())
+        }
         BoardError::BoardNotFound => HttpError::NotFound(e.to_string()),
     }
 }

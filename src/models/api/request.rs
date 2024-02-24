@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::models::game::{board::State as BoardState, moves::Step};
+use crate::models::game::board::State as BoardState;
 
 #[derive(Debug, Deserialize)]
 pub struct BoardParams {
@@ -10,7 +10,7 @@ pub struct BoardParams {
 #[derive(Debug, Deserialize)]
 pub struct BlockParams {
     pub board_id: i32,
-    pub block_idx: u8,
+    pub block_idx: usize,
 }
 
 #[derive(Debug, Deserialize)]
@@ -27,7 +27,8 @@ pub struct ChangeBlock {
 
 #[derive(Debug, Deserialize)]
 pub struct MoveBlock {
-    pub steps: Vec<Step>,
+    pub row_diff: i8,
+    pub col_diff: i8,
 }
 
 #[derive(Debug, Deserialize)]
@@ -45,6 +46,7 @@ pub struct ChangeState {
 #[derive(Debug, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum AlterBoard {
-    ChangeBoardState(ChangeState),
+    ChangeState(ChangeState),
+    Reset,
     UndoMove,
 }

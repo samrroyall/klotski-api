@@ -8,5 +8,6 @@ diesel::table! {
         blocks -> Text,
         filled -> Text,
         moves -> Text,
+        next_moves -> Text,
     }
 }

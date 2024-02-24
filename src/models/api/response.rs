@@ -1,37 +1,24 @@
 use serde::Serialize;
 
-use crate::models::{
-    db::tables::SelectableBoard,
-    game::moves::{FlatBoardMove, FlatMove},
-};
+use crate::models::{db::tables::SelectableBoard, game::moves::FlatBoardMove};
 
 #[derive(Debug, Serialize)]
 pub struct Board {
     id: i32,
-    blocks: String,
     state: String,
-    next_moves: Option<String>,
+    blocks: String,
+    filled: String,
+    next_moves: String,
 }
 
 impl Board {
     pub fn new(board_record: &SelectableBoard) -> Self {
         Self {
             id: board_record.id,
-            blocks: board_record.blocks.clone(),
             state: board_record.state.clone(),
-            next_moves: None,
-        }
-    }
-
-    pub fn new_with_next_moves(
-        board_record: &SelectableBoard,
-        next_moves: &Vec<Vec<FlatMove>>,
-    ) -> Self {
-        Self {
-            id: board_record.id,
             blocks: board_record.blocks.clone(),
-            state: board_record.state.clone(),
-            next_moves: Some(serde_json::to_string(next_moves).unwrap()),
+            filled: board_record.filled.clone(),
+            next_moves: board_record.next_moves.clone(),
         }
     }
 }

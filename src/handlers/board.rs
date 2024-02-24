@@ -21,14 +21,28 @@ use crate::models::{
 };
 use crate::repositories::board_states::{
     create as create_board_state, delete as delete_board_state, get as get_board_state,
-    update_while_building as update_board_state_while_building,
-    update_while_solving as update_board_state_while_solving,
+    update as update_board_state,
 };
 use crate::services::{db::Pool as DbPool, solver::Solver};
 
 #[debug_handler]
 pub async fn new(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(&pool)
+        .map(|board_state| {
+            (
+                StatusCode::OK,
+                JsonResponse(BoardResponse::new(&board_state)),
+            )
+        })
+        .map_err(handle_board_state_repository_error)
+        .into_response()
+}
+
+fn update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
+where
+    F: FnOnce(&mut Board) -> Result<(), BoardError>,
+{
+    update_board_state(board_id, update_fn, pool)
         .map(|board_state| {
             (
                 StatusCode::OK,
@@ -57,16 +71,19 @@ pub async fn alter(
     let body = json_extraction.unwrap().0;
 
     match body {
-        AlterBoardRequest::ChangeBoardState(data) => make_building_update(
+        AlterBoardRequest::ChangeState(data) => update(
             params.board_id,
             |board: &mut Board| board.change_state(&data.new_state),
             &pool,
         ),
-        AlterBoardRequest::UndoMove => make_solving_update(
+        AlterBoardRequest::UndoMove => update(
             params.board_id,
             |board: &mut Board| board.undo_move(),
             &pool,
         ),
+        AlterBoardRequest::Reset => {
+            update(params.board_id, |board: &mut Board| board.reset(), &pool)
+        }
     }
 }
 
@@ -116,21 +133,6 @@ pub async fn delete(
         .into_response()
 }
 
-fn make_building_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    update_board_state_while_building(board_id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new(&board_state)),
-            )
-        })
-        .map_err(handle_board_state_repository_error)
-        .into_response()
-}
-
 #[debug_handler]
 pub async fn add_block(
     Extension(pool): Extension<DbPool>,
@@ -155,25 +157,7 @@ pub async fn add_block(
         Err(BoardError::BlockInvalid)
     };
 
-    make_building_update(params.board_id, update_fn, &pool)
-}
-
-fn make_solving_update<F>(board_id: i32, update_fn: F, pool: &DbPool) -> Response
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    update_board_state_while_solving(board_id, update_fn, pool)
-        .map(|(board_state, next_moves)| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new_with_next_moves(
-                    &board_state,
-                    &next_moves,
-                )),
-            )
-        })
-        .map_err(handle_board_state_repository_error)
-        .into_response()
+    update(params.board_id, update_fn, &pool)
 }
 
 #[debug_handler]
@@ -194,14 +178,14 @@ pub async fn alter_block(
     let body = json_extraction.unwrap().0;
 
     match body {
-        AlterBlockRequest::ChangeBlock(data) => make_building_update(
+        AlterBlockRequest::ChangeBlock(data) => update(
             params.board_id,
             |board: &mut Board| board.change_block(params.block_idx, data.new_block_id),
             &pool,
         ),
-        AlterBlockRequest::MoveBlock(data) => make_solving_update(
+        AlterBlockRequest::MoveBlock(data) => update(
             params.board_id,
-            |board: &mut Board| board.move_block(params.block_idx, data.steps.as_slice()),
+            |board: &mut Board| board.move_block(params.block_idx, data.row_diff, data.col_diff),
             &pool,
         ),
     }
@@ -220,5 +204,5 @@ pub async fn remove_block(
 
     let update_fn = |board: &mut Board| board.remove_block(params.block_idx);
 
-    make_building_update(params.board_id, update_fn, &pool)
+    update(params.board_id, update_fn, &pool)
 }

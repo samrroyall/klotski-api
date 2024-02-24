@@ -2,7 +2,6 @@ use diesel::prelude::*;
 
 use crate::errors::board::Error as BoardError;
 use crate::models::db::schema::boards::dsl::{boards, id};
-use crate::models::game::moves::FlatMove;
 use crate::models::{
     db::tables::{InsertableBoard, SelectableBoard},
     game::board::Board,
@@ -69,7 +68,7 @@ pub fn delete(search_id: i32, pool: &DbPool) -> Result<(), Error> {
     Ok(())
 }
 
-fn get_updated<F>(search_id: i32, update_fn: F, pool: &DbPool) -> Result<Board, Error>
+pub fn update<F>(search_id: i32, update_fn: F, pool: &DbPool) -> Result<SelectableBoard, Error>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
@@ -83,51 +82,9 @@ where
 
     update_fn(&mut board)?;
 
-    Ok(board)
-}
-
-pub fn update_while_building<F>(
-    search_id: i32,
-    update_fn: F,
-    pool: &DbPool,
-) -> Result<SelectableBoard, Error>
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    let updated_board = get_updated(search_id, update_fn, pool)?;
-
-    let new_board_state = InsertableBoard::from(&updated_board);
-
-    let mut conn = pool.get().unwrap();
-
     let result = diesel::update(boards.filter(id.eq(search_id)))
-        .set(&new_board_state)
+        .set(&InsertableBoard::from(&board))
         .get_result(&mut conn)?;
 
     Ok(result)
-}
-
-type NextMoves = Vec<Vec<FlatMove>>;
-
-pub fn update_while_solving<F>(
-    search_id: i32,
-    update_fn: F,
-    pool: &DbPool,
-) -> Result<(SelectableBoard, NextMoves), Error>
-where
-    F: FnOnce(&mut Board) -> Result<(), BoardError>,
-{
-    let updated_board = get_updated(search_id, update_fn, pool)?;
-
-    let next_moves = updated_board.get_next_moves()?;
-
-    let new_board_state = InsertableBoard::from(&updated_board);
-
-    let mut conn = pool.get().unwrap();
-
-    let result = diesel::update(boards.filter(id.eq(search_id)))
-        .set(&new_board_state)
-        .get_result(&mut conn)?;
-
-    Ok((result, next_moves))
 }

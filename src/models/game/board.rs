@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::{
     blocks::Positioned as PositionedBlock,
-    moves::{FlatMove, Move, Step},
+    moves::{FlatBoardMove, FlatMove, Step},
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
@@ -11,8 +11,7 @@ use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 pub enum State {
     Building,
     ReadyToSolve,
-    AlgoSolving,
-    ManualSolving,
+    Solving,
     Solved,
 }
 
@@ -20,8 +19,9 @@ pub enum State {
 pub struct Board {
     pub state: State,
     pub blocks: Vec<PositionedBlock>,
-    pub moves: Vec<Move>,
     pub filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
+    pub moves: Vec<FlatBoardMove>,
+    pub next_moves: Vec<Vec<FlatMove>>,
 }
 
 impl Default for Board {
@@ -29,8 +29,9 @@ impl Default for Board {
         Self::new(
             State::Building,
             vec![],
-            vec![],
             [[false; Self::COLS as usize]; Self::ROWS as usize],
+            vec![],
+            vec![],
         )
     }
 }
@@ -76,30 +77,6 @@ impl Board {
         }
 
         true
-    }
-
-    fn do_move(&mut self, block: &mut PositionedBlock, move_: &[Step]) -> Result<(), BoardError> {
-        let mut step_stack = vec![];
-
-        self.updated_filled_range(&block.range, false);
-
-        for step in move_ {
-            if self.is_step_valid_for_block(block, step) && block.do_step(step).is_ok() {
-                step_stack.push(step);
-            } else {
-                while let Some(step) = step_stack.pop() {
-                    block.undo_step(step).unwrap();
-                }
-
-                self.updated_filled_range(&block.range, true);
-
-                return Err(BoardError::BlockPlacementInvalid);
-            }
-        }
-
-        self.updated_filled_range(&block.range, true);
-
-        Ok(())
     }
 
     fn is_step_valid_for_block(&self, block: &PositionedBlock, step: &Step) -> bool {
@@ -172,20 +149,34 @@ impl Board {
             .map(|move_| FlatMove::from_steps(move_.as_slice()))
             .collect()
     }
+
+    fn update_next_moves(&mut self) {
+        self.next_moves = self
+            .blocks
+            .iter()
+            .map(|block| {
+                let mut moves = self.get_next_moves_for_block(block);
+                moves.dedup();
+                moves
+            })
+            .collect();
+    }
 }
 
 impl Board {
     pub fn new(
         state: State,
         blocks: Vec<PositionedBlock>,
-        moves: Vec<Move>,
         filled: [[bool; Self::COLS as usize]; Self::ROWS as usize],
+        moves: Vec<FlatBoardMove>,
+        next_moves: Vec<Vec<FlatMove>>,
     ) -> Self {
         Self {
             state,
             blocks,
-            moves,
             filled,
+            moves,
+            next_moves,
         }
     }
 
@@ -218,18 +209,18 @@ impl Board {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::ReadyToSolve, State::Building | State::ManualSolving | State::AlgoSolving) => {}
-            (State::ManualSolving | State::AlgoSolving, State::ReadyToSolve) => {
+            (State::ReadyToSolve, State::Building | State::Solving) => {}
+            (State::Solving, State::ReadyToSolve) => {
                 if !self.moves.is_empty() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::ManualSolving | State::AlgoSolving, State::Solved) => {
+            (State::Solving, State::Solved) => {
                 if !self.is_solved() {
                     return Err(BoardError::BoardStateInvalid);
                 }
             }
-            (State::Solved, State::ManualSolving) => {
+            (State::Solved, State::Solving) => {
                 if self.is_solved() {
                     return Err(BoardError::BoardStateInvalid);
                 }
@@ -265,17 +256,17 @@ impl Board {
 
         self.blocks.push(block);
 
-        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+        if self.change_state(&State::ReadyToSolve).is_ok() {
+            self.update_next_moves();
+        }
 
         Ok(())
     }
 
-    pub fn change_block(&mut self, block_idx: u8, new_block_id: u8) -> Result<(), BoardError> {
+    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(&State::Building)?;
         }
-
-        let block_idx = usize::from(block_idx);
 
         let block = self
             .blocks
@@ -303,17 +294,17 @@ impl Board {
 
         self.blocks[block_idx] = new_block;
 
-        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+        if self.change_state(&State::ReadyToSolve).is_ok() {
+            self.update_next_moves();
+        }
 
         Ok(())
     }
 
-    pub fn remove_block(&mut self, block_idx: u8) -> Result<(), BoardError> {
+    pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
         if self.state != State::Building {
             return Err(BoardError::BoardStateInvalid);
         }
-
-        let block_idx = usize::from(block_idx);
 
         let block = self
             .blocks
@@ -325,24 +316,35 @@ impl Board {
 
         self.blocks.swap_remove(block_idx);
 
-        if self.state == State::ReadyToSolve {
-            self.change_state(&State::Building)?;
+        if self.state == State::ReadyToSolve && self.change_state(&State::Building).is_ok() {
+            self.next_moves = vec![];
         }
 
         Ok(())
     }
 
-    pub fn move_block_unchecked(
+    pub fn move_block(
         &mut self,
-        block_idx: u8,
+        block_idx: usize,
         row_diff: i8,
         col_diff: i8,
     ) -> Result<(), BoardError> {
-        if self.state != State::AlgoSolving {
-            self.change_state(&State::AlgoSolving)?;
+        if self.state != State::Solving {
+            self.change_state(&State::Solving)?;
         }
 
-        let block_idx = usize::from(block_idx);
+        if self.state == State::Solving {
+            let is_valid_move = self
+                .next_moves
+                .get(block_idx)
+                .unwrap()
+                .iter()
+                .any(|move_| move_.row_diff == row_diff && move_.col_diff == col_diff);
+
+            if !is_valid_move {
+                return Err(BoardError::BlockPlacementInvalid);
+            }
+        }
 
         let mut block = self
             .blocks
@@ -352,60 +354,32 @@ impl Board {
 
         self.updated_filled_range(&block.range, false);
 
-        block.move_by(row_diff, col_diff).unwrap();
+        if block.move_by(row_diff, col_diff).is_err() {
+            self.updated_filled_range(&block.range, true);
+
+            return Err(BoardError::BlockPlacementInvalid);
+        };
 
         self.updated_filled_range(&block.range, true);
 
         self.blocks[block_idx] = block;
 
-        let _board_is_solved = self.change_state(&State::Solved).is_ok();
+        self.moves.push(FlatBoardMove::new(
+            block_idx,
+            &FlatMove::new(row_diff, col_diff).unwrap(),
+        ));
 
-        Ok(())
-    }
-
-    pub fn move_block(&mut self, block_idx: u8, move_: &[Step]) -> Result<(), BoardError> {
-        if self.state != State::ManualSolving {
-            self.change_state(&State::ManualSolving)?;
+        if self.change_state(&State::Solved).is_ok() {
+            self.next_moves = vec![];
+        } else {
+            self.update_next_moves();
         }
 
-        let block_idx_usize = usize::from(block_idx);
-
-        let mut block = self
-            .blocks
-            .get(block_idx_usize)
-            .cloned()
-            .ok_or(BoardError::BlockIndexOutOfBounds)?;
-
-        self.do_move(&mut block, move_)?;
-
-        self.blocks[block_idx_usize] = block;
-
-        self.moves
-            .push(Move::new(block_idx, move_.to_vec()).unwrap());
-
-        let _board_is_solved = self.change_state(&State::Solved).is_ok();
-
         Ok(())
-    }
-
-    pub fn get_next_moves(&self) -> Result<Vec<Vec<FlatMove>>, BoardError> {
-        if self.state != State::ManualSolving && self.state != State::AlgoSolving {
-            return Err(BoardError::BoardStateInvalid);
-        }
-
-        Ok(self
-            .blocks
-            .iter()
-            .map(|block| {
-                let mut moves = self.get_next_moves_for_block(block);
-                moves.dedup();
-                moves
-            })
-            .collect())
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
-        if self.state != State::ManualSolving && self.state != State::Solved {
+        if ![State::Solving, State::Solved].contains(&self.state) {
             return Err(BoardError::BoardStateInvalid);
         }
 
@@ -415,21 +389,42 @@ impl Board {
             .ok_or(BoardError::NoMovesToUndo)?
             .opposite();
 
-        let block_idx = usize::from(opposite_move.block_idx);
-
         let mut block = self
             .blocks
-            .get(block_idx)
+            .get(opposite_move.block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.do_move(&mut block, opposite_move.steps.as_slice())?;
+        self.updated_filled_range(&block.range, false);
 
-        self.blocks[block_idx] = block;
+        if block
+            .move_by(opposite_move.row_diff, opposite_move.col_diff)
+            .is_err()
+        {
+            self.updated_filled_range(&block.range, true);
+
+            return Err(BoardError::BlockPlacementInvalid);
+        }
+
+        self.updated_filled_range(&block.range, true);
+
+        self.blocks[opposite_move.block_idx] = block;
 
         if self.state == State::Solved {
-            self.change_state(&State::ManualSolving)?;
+            let _board_is_no_longer_solved = self.change_state(&State::Solving).is_ok();
         }
+
+        self.update_next_moves();
+
+        Ok(())
+    }
+
+    pub fn reset(&mut self) -> Result<(), BoardError> {
+        while !self.moves.is_empty() {
+            self.undo_move()?;
+        }
+
+        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
 
         Ok(())
     }
@@ -591,6 +586,54 @@ mod tests {
     }
 
     #[test]
+    fn update_next_moves() {
+        let blocks = vec![
+            PositionedBlock::new(3, 0, 0).unwrap(),
+            PositionedBlock::new(4, 0, 1).unwrap(),
+            PositionedBlock::new(3, 0, 3).unwrap(),
+            PositionedBlock::new(3, 2, 0).unwrap(),
+            PositionedBlock::new(2, 2, 1).unwrap(),
+            PositionedBlock::new(3, 2, 3).unwrap(),
+            PositionedBlock::new(1, 3, 1).unwrap(),
+            PositionedBlock::new(1, 3, 2).unwrap(),
+            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(1, 4, 3).unwrap(),
+        ];
+
+        let mut board = Board::default();
+        for block in blocks {
+            board.add_block(block).unwrap();
+        }
+
+        assert_eq!(board.state, State::ReadyToSolve);
+
+        assert!(board.change_state(&State::Solving).is_ok());
+
+        assert_eq!(
+            board
+                .next_moves
+                .iter()
+                .fold(0, |acc, moves| acc + moves.len()),
+            8
+        );
+
+        let expected_moves = [
+            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, 1).unwrap()],
+            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, -1).unwrap()],
+            vec![FlatMove::new(0, 1).unwrap(), FlatMove::new(0, 2).unwrap()],
+            vec![FlatMove::new(0, -1).unwrap(), FlatMove::new(0, -2).unwrap()],
+        ];
+
+        for i in 0..board.next_moves.len() {
+            if i < 6 {
+                assert_eq!(board.next_moves[i].len(), 0);
+            } else {
+                assert_eq!(board.next_moves[i], expected_moves[i - 6]);
+            }
+        }
+    }
+
+    #[test]
     fn hash() {
         let mut board = Board::default();
         let blocks = [
@@ -618,8 +661,7 @@ mod tests {
         let mut board = Board::default();
 
         assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::AlgoSolving).is_err());
-        assert!(board.change_state(&State::ManualSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
 
         let blocks = [
             PositionedBlock::new(3, 0, 0).unwrap(),
@@ -638,14 +680,14 @@ mod tests {
             board.blocks.push(block.clone());
         }
 
-        assert!(board.change_state(&State::AlgoSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
         assert!(board.change_state(&State::ReadyToSolve).is_ok());
         assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::ManualSolving).is_err());
+        assert!(board.change_state(&State::Solving).is_err());
         assert!(board.change_state(&State::ReadyToSolve).is_ok());
-        assert!(board.change_state(&State::ManualSolving).is_ok());
+        assert!(board.change_state(&State::Solving).is_ok());
 
-        let move_ = Move::new(0, vec![Step::Down]).unwrap();
+        let move_ = FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap());
         board.moves.push(move_);
 
         assert!(board.change_state(&State::ReadyToSolve).is_err());
@@ -755,67 +797,22 @@ mod tests {
     }
 
     #[test]
-    fn move_block_unchecked() {
-        let mut board = Board::default();
-
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.updated_filled_range(&block_one.range, true);
-        board.blocks.push(block_one);
-
-        let block_two = PositionedBlock::new(1, 0, 1).unwrap();
-        board.updated_filled_range(&block_two.range, true);
-        board.blocks.push(block_two);
-
-        board.state = State::AlgoSolving;
-
-        assert!(board.move_block_unchecked(0, 1, 0).is_ok());
-        assert_eq!(
-            board.filled,
-            [
-                [false, true, false, false],
-                [true, false, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-            ]
-        );
-
-        assert!(board.move_block_unchecked(0, 0, 1).is_ok());
-        assert_eq!(
-            board.filled,
-            [
-                [false, true, false, false],
-                [false, true, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-            ]
-        );
-
-        assert!(board.move_block_unchecked(0, -1, 0).is_ok());
-
-        assert_eq!(
-            board.filled,
-            [
-                [false, true, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-                [false, false, false, false],
-            ]
-        );
-    }
-
-    #[test]
     fn move_block() {
         let mut board = Board::default();
 
         let block_one = PositionedBlock::new(1, 0, 0).unwrap();
         board.updated_filled_range(&block_one.range, true);
         board.blocks.push(block_one);
-        board.state = State::ManualSolving;
+        board.state = State::Solving;
+        board.next_moves = vec![vec![
+            FlatMove::new(0, 1).unwrap(),
+            FlatMove::new(0, 2).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+            FlatMove::new(1, 0).unwrap(),
+            FlatMove::new(2, 0).unwrap(),
+        ]];
 
-        assert!(board.move_block(0, &[Step::Right]).is_ok());
+        assert!(board.move_block(0, 0, 1).is_ok());
 
         assert_eq!(
             board.filled,
@@ -829,19 +826,26 @@ mod tests {
         );
 
         assert_eq!(
-            board.move_block(0, &[Step::Up]),
+            board.move_block(0, -1, 0),
             Err(BoardError::BlockPlacementInvalid)
         );
-        assert!(board.move_block(0, &[Step::Left]).is_ok());
-        assert!(board.move_block(0, &[Step::Down]).is_ok());
+        assert!(board.move_block(0, 0, -1).is_ok());
+        assert!(board.move_block(0, 1, 0).is_ok());
         assert_eq!(
-            board.move_block(0, &[Step::Left]),
+            board.move_block(0, 0, -1),
             Err(BoardError::BlockPlacementInvalid)
         );
 
         let block_two = PositionedBlock::new(4, 3, 2).unwrap();
         board.updated_filled_range(&block_two.range, true);
         board.blocks.push(block_two);
+        board.next_moves.push(vec![
+            FlatMove::new(-1, 0).unwrap(),
+            FlatMove::new(-2, 0).unwrap(),
+            FlatMove::new(-1, -1).unwrap(),
+            FlatMove::new(0, -1).unwrap(),
+            FlatMove::new(0, -2).unwrap(),
+        ]);
 
         assert_eq!(
             board.filled,
@@ -855,20 +859,18 @@ mod tests {
         );
 
         assert_eq!(
-            board.move_block(1, &[Step::Right]),
+            board.move_block(1, 0, 1),
             Err(BoardError::BlockPlacementInvalid)
         );
         assert_eq!(
-            board.move_block(1, &[Step::Down]),
+            board.move_block(1, 1, 0),
             Err(BoardError::BlockPlacementInvalid)
         );
-        assert!(board.move_block(1, &[Step::Left]).is_ok());
-
-        board.state = State::ManualSolving;
-
-        assert!(board.move_block(1, &[Step::Up, Step::Up]).is_ok());
+        assert!(board.move_block(1, 0, -2).is_ok());
+        assert!(board.move_block(1, -1, 1).is_ok());
+        assert!(board.move_block(1, -1, 0).is_ok());
         assert_eq!(
-            board.move_block(1, &[Step::Left]),
+            board.move_block(1, 0, -1),
             Err(BoardError::BlockPlacementInvalid)
         );
 
@@ -891,15 +893,23 @@ mod tests {
         let block = PositionedBlock::new(1, 2, 0).unwrap();
         board.updated_filled_range(&block.range, true);
         board.blocks.push(block);
-
+        board.state = State::Solving;
         board.moves = vec![
-            Move::new(0, vec![Step::Right]).unwrap(),
-            Move::new(0, vec![Step::Down]).unwrap(),
-            Move::new(0, vec![Step::Left]).unwrap(),
-            Move::new(0, vec![Step::Down]).unwrap(),
+            FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(0, -1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
         ];
-
-        board.state = State::ManualSolving;
+        board.next_moves = vec![vec![
+            FlatMove::new(-1, 0).unwrap(),
+            FlatMove::new(-2, 0).unwrap(),
+            FlatMove::new(1, 0).unwrap(),
+            FlatMove::new(2, 0).unwrap(),
+            FlatMove::new(0, 1).unwrap(),
+            FlatMove::new(0, 2).unwrap(),
+            FlatMove::new(-1, 1).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+        ]];
 
         assert!(board.undo_move().is_ok());
         assert_eq!(board.moves.len(), 3);
@@ -957,46 +967,31 @@ mod tests {
     }
 
     #[test]
-    fn get_next_moves() {
-        let blocks = vec![
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
-        ];
-
-        let expected_moves = [
-            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, 1).unwrap()],
-            vec![FlatMove::new(1, 0).unwrap(), FlatMove::new(1, -1).unwrap()],
-            vec![FlatMove::new(0, 1).unwrap(), FlatMove::new(0, 2).unwrap()],
-            vec![FlatMove::new(0, -1).unwrap(), FlatMove::new(0, -2).unwrap()],
-        ];
-
+    fn reset() {
         let mut board = Board::default();
-        for block in blocks {
-            board.add_block(block).unwrap();
-        }
 
-        assert_eq!(board.state, State::ReadyToSolve);
+        let block = PositionedBlock::new(1, 2, 0).unwrap();
+        board.updated_filled_range(&block.range, true);
+        board.blocks.push(block);
+        board.state = State::Solving;
+        board.moves = vec![
+            FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(0, -1).unwrap()),
+            FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap()),
+        ];
+        board.next_moves = vec![vec![
+            FlatMove::new(-1, 0).unwrap(),
+            FlatMove::new(-2, 0).unwrap(),
+            FlatMove::new(1, 0).unwrap(),
+            FlatMove::new(2, 0).unwrap(),
+            FlatMove::new(0, 1).unwrap(),
+            FlatMove::new(0, 2).unwrap(),
+            FlatMove::new(-1, 1).unwrap(),
+            FlatMove::new(1, 1).unwrap(),
+        ]];
 
-        assert!(board.change_state(&State::ManualSolving).is_ok());
-
-        let next_moves = board.get_next_moves().unwrap();
-
-        assert_eq!(next_moves.iter().fold(0, |acc, moves| acc + moves.len()), 8);
-
-        for i in 0..next_moves.len() {
-            if i < 6 {
-                assert_eq!(next_moves[i].len(), 0);
-            } else {
-                assert_eq!(next_moves[i], expected_moves[i - 6]);
-            }
-        }
+        assert!(board.reset().is_ok());
+        assert_eq!(board.moves.len(), 0);
     }
 }
