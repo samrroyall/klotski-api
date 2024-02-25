@@ -116,14 +116,24 @@ impl Board {
                     block.do_step(step).unwrap();
                 }
 
-                for step in &Step::ALL {
-                    if self.is_step_valid_for_block(&block, step) && block.do_step(step).is_ok() {
+                let opposite_last_move = &moves[i].last().map(Step::opposite);
+
+                for ref next_step in Step::ALL {
+                    if opposite_last_move.is_some()
+                        && opposite_last_move.as_ref() == Some(next_step)
+                    {
+                        continue;
+                    }
+
+                    if self.is_step_valid_for_block(&block, next_step)
+                        && block.do_step(next_step).is_ok()
+                    {
                         let mut new_move = moves[i].clone();
-                        new_move.push(step.clone());
+                        new_move.push(next_step.clone());
 
                         moves.push(new_move);
 
-                        block.undo_step(step).unwrap();
+                        block.undo_step(next_step).unwrap();
                     }
                 }
 

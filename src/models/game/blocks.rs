@@ -13,15 +13,6 @@ pub enum Block {
 }
 
 impl Block {
-    pub fn to_char(self) -> char {
-        match self {
-            Self::OneByOne => '1',
-            Self::OneByTwo => '2',
-            Self::TwoByOne => '3',
-            Self::TwoByTwo => '4',
-        }
-    }
-
     pub fn rows(self) -> u8 {
         match self {
             Self::OneByOne | Self::OneByTwo => 1,

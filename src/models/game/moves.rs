@@ -68,10 +68,6 @@ impl FlatMove {
             col_diff: steps.iter().fold(0, |acc, step| acc + step.col_diff()),
         }
     }
-
-    pub fn is_opposite(&self, other: &Self) -> bool {
-        self.row_diff == -other.row_diff && self.col_diff == -other.col_diff
-    }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -90,12 +86,6 @@ impl FlatBoardMove {
         }
     }
 
-    pub fn is_opposite(&self, other: &Self) -> bool {
-        self.block_idx == other.block_idx
-            && self.row_diff == -other.row_diff
-            && self.col_diff == -other.col_diff
-    }
-
     pub fn opposite(&self) -> Self {
         Self {
             block_idx: self.block_idx,
@@ -110,14 +100,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn step_is_opposite() {
-        assert_eq!(Step::Left.opposite(), Step::Right);
-        assert_eq!(Step::Up.opposite(), Step::Down);
-        assert_ne!(Step::Up.opposite(), Step::Right);
-        assert_ne!(Step::Down.opposite(), Step::Left);
-    }
-
-    #[test]
     fn flat_move() {
         let flat_move_one = FlatMove::from_steps(&[Step::Up, Step::Left]);
 
@@ -130,11 +112,6 @@ mod tests {
         assert_eq!(flat_move_two.col_diff, -1);
 
         assert_eq!(flat_move_one, flat_move_two);
-
-        let flat_move_three = FlatMove::from_steps(&[Step::Down, Step::Right]);
-
-        assert!(flat_move_three.is_opposite(&flat_move_one));
-        assert!(flat_move_three.is_opposite(&flat_move_two));
     }
 
     #[test]
@@ -155,9 +132,6 @@ mod tests {
 
         let flat_move_three = FlatMove::from_steps(&[Step::Down, Step::Right]);
         let flat_board_move_three = FlatBoardMove::new(0, &flat_move_three);
-
-        assert!(flat_board_move_three.is_opposite(&flat_board_move_one));
-        assert!(flat_board_move_three.is_opposite(&flat_board_move_two));
 
         assert_eq!(flat_board_move_three.opposite(), flat_board_move_one);
         assert_eq!(flat_board_move_three.opposite(), flat_board_move_two);
