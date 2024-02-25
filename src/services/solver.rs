@@ -1,105 +1,87 @@
-use std::cell::RefCell;
 use std::collections::{HashSet, VecDeque};
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use crate::errors::board::Error as BoardError;
-use crate::models::game::{board::Board, moves::FlatBoardMove};
-
-type Edge = Rc<RefCell<TreeNode>>;
-
-#[derive(Debug, Clone)]
-struct TreeNode {
-    parent: Option<Edge>,
-    move_: FlatBoardMove,
-    board: Board,
-}
-
-impl TreeNode {
-    pub fn new(parent: Option<Edge>, move_: FlatBoardMove, board: Board) -> Self {
-        Self {
-            parent,
-            move_,
-            board,
-        }
-    }
-
-    pub fn from_board(board: Board) -> Self {
-        Self {
-            parent: None,
-            move_: FlatBoardMove::default(),
-            board,
-        }
-    }
-}
+use crate::models::game::{
+    board::{Board, State as BoardState},
+    moves::FlatBoardMove,
+};
 
 pub struct Solver {
     start_board: Board,
-    seen: HashSet<String>,
+    seen: Arc<Mutex<HashSet<u64>>>,
 }
 
 impl Solver {
-    fn upsert_hash(&mut self, board_hash: String) -> bool {
-        if self.seen.contains(&board_hash) {
-            false
-        } else {
-            self.seen.insert(board_hash);
-            true
-        }
-    }
+    const NUM_THREADS: usize = 4;
 
-    fn get_children(&mut self, parent_node: &Rc<RefCell<TreeNode>>) -> Vec<TreeNode> {
-        let mut children = vec![];
+    fn process_sub_level(
+        batch_size: usize,
+        queue: &Arc<Mutex<VecDeque<Board>>>,
+        seen: &Arc<Mutex<HashSet<u64>>>,
+    ) -> Option<Board> {
+        for _ in 0..batch_size {
+            let mut board = queue.lock().unwrap().pop_front().unwrap();
 
-        let board = parent_node.borrow().board.clone();
+            if board.state == BoardState::Solved {
+                return Some(board);
+            }
 
-        for (block_idx, moves) in board.get_next_moves().into_iter().enumerate() {
-            for move_ in moves {
-                let child_move = FlatBoardMove::new(block_idx, &move_);
+            let next_moves = board.get_next_moves();
 
-                if child_move.is_opposite(&parent_node.borrow().move_) {
-                    continue;
+            for (block_idx, moves) in next_moves.into_iter().enumerate() {
+                for move_ in moves {
+                    board.move_block_unchecked(block_idx, move_.row_diff, move_.col_diff);
+
+                    if seen.lock().unwrap().insert(board.hash()) {
+                        queue.lock().unwrap().push_back(board.clone());
+                    }
+
+                    board.undo_move_unchecked();
                 }
-
-                let mut child_board = board.clone();
-
-                child_board
-                    .move_block_optimistic(block_idx, move_.row_diff, move_.col_diff)
-                    .unwrap();
-
-                if !self.upsert_hash(child_board.hash()) {
-                    continue;
-                }
-
-                children.push(TreeNode::new(
-                    Some(parent_node.clone()),
-                    child_move,
-                    child_board,
-                ));
             }
         }
 
-        children
+        None
     }
 
-    fn bfs(&mut self, root: TreeNode) -> Option<Rc<RefCell<TreeNode>>> {
-        let root_cell = Rc::new(RefCell::new(root));
+    fn parallel_bfs(&mut self) -> Option<Board> {
+        let root = self.start_board.clone();
 
-        self.seen.insert(root_cell.borrow().board.hash());
+        if root.state == BoardState::Solved {
+            return Some(root);
+        }
 
-        let mut queue = VecDeque::from([root_cell]);
+        let queue: Arc<Mutex<VecDeque<Board>>> = Arc::new(Mutex::new(VecDeque::new()));
 
-        while !queue.is_empty() {
-            let queue_size = queue.len();
+        queue.lock().unwrap().push_back(root);
 
-            for _ in 0..queue_size {
-                let node = queue.pop_front().unwrap();
+        while !queue.lock().unwrap().is_empty() {
+            let mut level_size = queue.lock().unwrap().len();
 
-                if node.borrow().board.is_solved() {
-                    return Some(node.clone());
-                }
+            let batch_size = (level_size + Self::NUM_THREADS - 1) / Self::NUM_THREADS;
 
-                for child in self.get_children(&node) {
-                    queue.push_back(Rc::new(RefCell::new(child)));
+            let mut handles = vec![];
+
+            for _ in 0..Self::NUM_THREADS {
+                let curr_batch_size = batch_size.min(level_size);
+
+                let queue_clone = Arc::clone(&queue);
+                let seen_clone = Arc::clone(&self.seen);
+
+                let handle = thread::spawn(move || {
+                    Solver::process_sub_level(curr_batch_size, &queue_clone, &seen_clone)
+                });
+
+                level_size -= curr_batch_size;
+
+                handles.push(handle);
+            }
+
+            for handle in handles {
+                if let Some(solved_board) = handle.join().unwrap() {
+                    return Some(solved_board);
                 }
             }
         }
@@ -109,96 +91,39 @@ impl Solver {
 }
 
 impl Solver {
-    pub fn new(start_board: Board) -> Result<Self, BoardError> {
-        if !start_board.is_ready_to_solve() {
-            return Err(BoardError::BoardNotReady);
-        }
+    pub fn new(board: &Board) -> Result<Self, BoardError> {
+        let mut start_board = board.clone();
 
-        if start_board.is_solved() {
-            return Err(BoardError::BoardAlreadySolved);
-        }
+        start_board.change_state(&BoardState::Solving)?;
+
+        start_board.moves.clear();
+
+        let _board_is_already_solved = start_board.change_state(&BoardState::Solved).is_ok();
 
         Ok(Self {
             start_board,
-            seen: HashSet::<String>::new(),
+            seen: Arc::new(Mutex::new(HashSet::<u64>::new())),
         })
     }
 
     pub fn solve(&mut self) -> Option<Vec<FlatBoardMove>> {
-        let root_node = TreeNode::from_board(self.start_board.clone());
-
-        self.bfs(root_node).map(|tail_node| {
-            let mut moves = vec![];
-
-            let mut maybe_node = Some(tail_node);
-
-            while let Some(node) = maybe_node {
-                let mut node = node.borrow_mut();
-
-                if node.parent.is_some() {
-                    moves.push(node.move_.clone());
-                }
-
-                maybe_node = node.parent.take();
-            }
-
-            moves.into_iter().rev().collect()
-        })
+        self.parallel_bfs().map(|solved_board| solved_board.moves)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{blocks::Positioned as PositionedBlock, board::Board};
+    use crate::models::game::{
+        blocks::{Block, Positioned as PositionedBlock},
+        board::Board,
+    };
 
     #[test]
     fn test_not_ready_board() {
-        let board = Board::default();
-
-        assert!(Solver::new(board).is_err());
-    }
-
-    #[test]
-    fn test_solved_board() {
         let mut board = Board::default();
 
-        let blocks = [
-            PositionedBlock::new(2, 0, 0).unwrap(),
-            PositionedBlock::new(2, 0, 2).unwrap(),
-            PositionedBlock::new(2, 1, 0).unwrap(),
-            PositionedBlock::new(2, 1, 2).unwrap(),
-            PositionedBlock::new(2, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(4, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-        ];
-
-        for block in blocks {
-            board.add_block(block).unwrap();
-        }
-
-        assert!(Solver::new(board).is_err());
-    }
-
-    fn test_solution_works(blocks: &[PositionedBlock]) {
-        let mut board = Board::default();
-
-        for block in blocks.iter() {
-            board.add_block(block.clone()).unwrap();
-        }
-
-        let mut solver = Solver::new(board.clone()).unwrap();
-        let moves = solver.solve().unwrap();
-
-        for move_ in moves.iter() {
-            board
-                .move_block_optimistic(move_.block_idx, move_.row_diff, move_.col_diff)
-                .unwrap();
-        }
-
-        assert!(board.is_solved());
+        assert!(Solver::new(&mut board).is_err());
     }
 
     fn test_board_is_optimal(blocks: &[PositionedBlock], expected_moves: usize) {
@@ -208,25 +133,61 @@ mod tests {
             board.add_block(block.clone()).unwrap();
         }
 
-        let mut solver = Solver::new(board).unwrap();
+        let mut solver = Solver::new(&mut board).unwrap();
         let moves = solver.solve().unwrap();
 
         assert_eq!(moves.len(), expected_moves);
     }
 
+    fn test_solution_works(blocks: &[PositionedBlock]) {
+        let mut board = Board::default();
+
+        for block in blocks.iter() {
+            board.add_block(block.clone()).unwrap();
+        }
+
+        let mut solver = Solver::new(&mut board).unwrap();
+        let moves = solver.solve().unwrap();
+
+        for move_ in moves.iter() {
+            board
+                .move_block(move_.block_idx, move_.row_diff, move_.col_diff)
+                .unwrap();
+        }
+
+        assert!(board.is_solved());
+    }
+
+    #[test]
+    fn test_solved_board() {
+        let blocks = [
+            PositionedBlock::new(Block::OneByTwo, 0, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 0, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 1, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
+        ];
+
+        test_board_is_optimal(&blocks, 0);
+    }
+
     #[test]
     fn test_classic_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -235,16 +196,16 @@ mod tests {
     #[test]
     fn test_classic_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 81);
@@ -253,19 +214,19 @@ mod tests {
     #[test]
     fn test_easy_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(1, 2, 1).unwrap(),
-            PositionedBlock::new(1, 2, 2).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 2).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -274,19 +235,19 @@ mod tests {
     #[test]
     fn test_easy_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(1, 2, 1).unwrap(),
-            PositionedBlock::new(1, 2, 2).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 2).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 17);
@@ -295,16 +256,16 @@ mod tests {
     #[test]
     fn test_medium_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(3, 2, 1).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(2, 3, 2).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -313,16 +274,16 @@ mod tests {
     #[test]
     fn test_medium_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(3, 2, 1).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(2, 3, 2).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 40);
@@ -331,16 +292,16 @@ mod tests {
     #[test]
     fn test_hard_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(3, 1, 0).unwrap(),
-            PositionedBlock::new(3, 1, 3).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -349,16 +310,16 @@ mod tests {
     #[test]
     fn test_hard_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(3, 1, 0).unwrap(),
-            PositionedBlock::new(3, 1, 3).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 120);

@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::board::Board;
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Step {
     Up,
     Down,
@@ -39,57 +39,27 @@ impl Step {
     }
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Move {
     pub block_idx: usize,
     pub steps: Vec<Step>,
 }
 
-impl Move {
-    pub fn new(block_idx: usize, steps: Vec<Step>) -> Option<Self> {
-        if !steps.is_empty() && steps.len() <= Board::NUM_EMPTY_CELLS as usize {
-            Some(Self { block_idx, steps })
-        } else {
-            None
-        }
-    }
-
-    pub fn opposite(&self) -> Move {
-        Move::new(
-            self.block_idx,
-            self.steps.iter().rev().map(Step::opposite).collect(),
-        )
-        .unwrap()
-    }
-
-    pub fn is_opposite(&self, other: &Move) -> bool {
-        if self.block_idx != other.block_idx || self.steps.len() != other.steps.len() {
-            return false;
-        }
-
-        for (step, other_step) in self.steps.iter().zip(other.steps.iter().rev()) {
-            if other_step != &step.opposite() {
-                return false;
-            }
-        }
-
-        true
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlatMove {
     pub row_diff: i8,
     pub col_diff: i8,
 }
 
 impl FlatMove {
+    const MAX_DIFF: u8 = Board::NUM_EMPTY_CELLS;
+
     pub fn new(row_diff: i8, col_diff: i8) -> Option<Self> {
-        if row_diff.abs() + col_diff.abs() > i8::try_from(Board::NUM_EMPTY_CELLS).unwrap() {
-            return None;
+        if u8::try_from(row_diff.abs() + col_diff.abs()).unwrap() <= Self::MAX_DIFF {
+            return Some(Self { row_diff, col_diff });
         }
 
-        Some(Self { row_diff, col_diff })
+        None
     }
 
     pub fn from_steps(steps: &[Step]) -> Self {
@@ -98,13 +68,9 @@ impl FlatMove {
             col_diff: steps.iter().fold(0, |acc, step| acc + step.col_diff()),
         }
     }
-
-    pub fn is_opposite(&self, other: &Self) -> bool {
-        self.row_diff == -other.row_diff && self.col_diff == -other.col_diff
-    }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct FlatBoardMove {
     pub block_idx: usize,
     pub row_diff: i8,
@@ -120,44 +86,18 @@ impl FlatBoardMove {
         }
     }
 
-    pub fn is_opposite(&self, other: &Self) -> bool {
-        self.block_idx == other.block_idx
-            && self.row_diff == -other.row_diff
-            && self.col_diff == -other.col_diff
+    pub fn opposite(&self) -> Self {
+        Self {
+            block_idx: self.block_idx,
+            row_diff: -self.row_diff,
+            col_diff: -self.col_diff,
+        }
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    #[test]
-    fn step_is_opposite() {
-        assert_eq!(Step::Left.opposite(), Step::Right);
-        assert_eq!(Step::Up.opposite(), Step::Down);
-        assert_ne!(Step::Up.opposite(), Step::Right);
-        assert_ne!(Step::Down.opposite(), Step::Left);
-    }
-
-    #[test]
-    fn move_is_opposite() {
-        let move_one = Move::new(0, vec![Step::Up, Step::Left]).unwrap();
-        let move_two = Move::new(0, vec![Step::Right, Step::Down]).unwrap();
-        let move_three = Move::new(0, vec![Step::Down, Step::Right]).unwrap();
-
-        assert!(move_one.is_opposite(&move_two));
-        assert!(!move_one.is_opposite(&move_three));
-    }
-
-    #[test]
-    fn move_opposite() {
-        let move_one = Move::new(0, vec![Step::Up, Step::Left]).unwrap();
-        let move_two = Move::new(0, vec![Step::Right, Step::Down]).unwrap();
-        let move_three = Move::new(0, vec![Step::Down, Step::Right]).unwrap();
-
-        assert_eq!(move_one.opposite(), move_two);
-        assert_ne!(move_one.opposite(), move_three);
-    }
 
     #[test]
     fn flat_move() {
@@ -172,5 +112,28 @@ mod tests {
         assert_eq!(flat_move_two.col_diff, -1);
 
         assert_eq!(flat_move_one, flat_move_two);
+    }
+
+    #[test]
+    fn flat_board_move() {
+        let flat_move_one = FlatMove::from_steps(&[Step::Up, Step::Left]);
+        let flat_board_move_one = FlatBoardMove::new(0, &flat_move_one);
+
+        assert_eq!(flat_board_move_one.row_diff, -1);
+        assert_eq!(flat_board_move_one.col_diff, -1);
+
+        let flat_move_two = FlatMove::from_steps(&[Step::Left, Step::Up]);
+        let flat_board_move_two = FlatBoardMove::new(0, &flat_move_two);
+
+        assert_eq!(flat_board_move_two.row_diff, -1);
+        assert_eq!(flat_board_move_two.col_diff, -1);
+
+        assert_eq!(flat_board_move_one, flat_board_move_two);
+
+        let flat_move_three = FlatMove::from_steps(&[Step::Down, Step::Right]);
+        let flat_board_move_three = FlatBoardMove::new(0, &flat_move_three);
+
+        assert_eq!(flat_board_move_three.opposite(), flat_board_move_one);
+        assert_eq!(flat_board_move_three.opposite(), flat_board_move_two);
     }
 }

@@ -1,14 +1,13 @@
 use std::error;
 use std::fmt;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Error {
     BlockIndexOutOfBounds,
     BlockInvalid,
     BlockPlacementInvalid,
-    BoardAlreadySolved,
     BoardNotFound,
-    BoardNotReady,
+    BoardStateInvalid,
     NoMovesToUndo,
 }
 
@@ -20,9 +19,8 @@ impl fmt::Display for Error {
             Error::BlockIndexOutOfBounds => write!(f, "Block index is out of bounds"),
             Error::BlockInvalid => write!(f, "Block ID provided is invalid"),
             Error::BlockPlacementInvalid => write!(f, "Block placement is invalid"),
-            Error::BoardAlreadySolved => write!(f, "Board is already solved"),
             Error::BoardNotFound => write!(f, "No board with matching ID"),
-            Error::BoardNotReady => write!(f, "Board not ready to solve"),
+            Error::BoardStateInvalid => write!(f, "Board state is invalid for operation"),
             Error::NoMovesToUndo => write!(f, "No board moves to undo"),
         }
     }

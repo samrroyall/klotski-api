@@ -1,37 +1,45 @@
 use diesel::prelude::*;
-use serde_json::to_string;
 
 use crate::models::game::board::Board;
 
-#[derive(AsChangeset, Insertable, Selectable, Queryable, Debug, Clone)]
-#[diesel(table_name = super::schema::board_states)]
-#[diesel(check_for_backend(diesel::pg::Pg))]
-pub struct BoardState {
-    pub id: String,
-    pub is_ready_to_solve: bool,
-    pub is_solved: bool,
+#[derive(Debug, Insertable, AsChangeset)]
+#[diesel(table_name = super::schema::boards)]
+pub struct InsertableBoard {
+    pub state: String,
     pub blocks: String,
-    pub filled: String,
+    pub grid: String,
     pub moves: String,
 }
 
-impl BoardState {
-    pub fn from(new_id: &String, board: &Board) -> Self {
+impl InsertableBoard {
+    pub fn from(board: &Board) -> Self {
         Self {
-            id: String::from(new_id),
-            is_ready_to_solve: board.is_ready_to_solve(),
-            is_solved: board.is_solved(),
-            blocks: to_string(&board.blocks).unwrap(),
-            filled: to_string(&board.filled).unwrap(),
-            moves: to_string(&board.moves).unwrap(),
+            state: serde_json::to_string(&board.state).unwrap(),
+            blocks: serde_json::to_string(&board.blocks).unwrap(),
+            grid: serde_json::to_string(&board.grid).unwrap(),
+            moves: serde_json::to_string(&board.moves).unwrap(),
         }
     }
+}
 
-    pub fn to_board(&self) -> Board {
+#[derive(Debug, Clone, Selectable, Queryable)]
+#[diesel(table_name = super::schema::boards)]
+pub struct SelectableBoard {
+    pub id: i32,
+    pub state: String,
+    pub blocks: String,
+    pub grid: String,
+    pub moves: String,
+}
+
+impl SelectableBoard {
+    pub fn into_board(self) -> Board {
         Board::new(
-            serde_json::from_str(&self.blocks).unwrap(),
-            serde_json::from_str(&self.moves).unwrap(),
-            serde_json::from_str(&self.filled).unwrap(),
+            self.id,
+            serde_json::from_str(self.state.as_str()).unwrap(),
+            serde_json::from_str(self.blocks.as_str()).unwrap(),
+            serde_json::from_str(self.grid.as_str()).unwrap(),
+            serde_json::from_str(self.moves.as_str()).unwrap(),
         )
     }
 }

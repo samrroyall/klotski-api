@@ -1,56 +1,42 @@
 use serde::Serialize;
 
-use crate::models::{
-    db::tables::BoardState,
-    game::moves::{FlatBoardMove, FlatMove},
+use crate::models::game::{
+    blocks::{Block, Positioned as PositionedBlock},
+    board::{Board as Board_, State as BoardState},
+    moves::{FlatBoardMove, FlatMove},
 };
 
 #[derive(Debug, Serialize)]
-pub struct Building {
-    id: String,
-    blocks: String,
-    ready_to_solve: bool,
+pub struct Board {
+    id: i32,
+    state: BoardState,
+    blocks: Vec<PositionedBlock>,
+    grid: [Option<Block>; (Board_::COLS * Board_::ROWS) as usize],
+    next_moves: Vec<Vec<FlatMove>>,
 }
 
-impl Building {
-    pub fn new(board_state: &BoardState) -> Self {
+impl Board {
+    pub fn new(mut board: Board_) -> Self {
+        let next_moves = board.get_next_moves();
+
         Self {
-            id: board_state.id.clone(),
-            blocks: board_state.blocks.clone(),
-            ready_to_solve: board_state.is_ready_to_solve,
-        }
-    }
-}
-
-#[derive(Debug, Serialize)]
-pub struct Solving {
-    id: String,
-    blocks: String,
-    next_moves: String,
-    is_solved: bool,
-}
-
-impl Solving {
-    pub fn new(board_state: &BoardState, next_moves: &Vec<Vec<FlatMove>>) -> Self {
-        Self {
-            id: board_state.id.clone(),
-            blocks: board_state.blocks.clone(),
-            next_moves: serde_json::to_string(next_moves).unwrap(),
-            is_solved: board_state.is_solved,
+            id: board.id,
+            state: board.state,
+            blocks: board.blocks,
+            grid: board.grid,
+            next_moves,
         }
     }
 }
 
 #[derive(Debug, Serialize)]
 pub struct Solved {
-    moves: String,
+    moves: Vec<FlatBoardMove>,
 }
 
 impl Solved {
-    pub fn new(moves: &Vec<FlatBoardMove>) -> Self {
-        Self {
-            moves: serde_json::to_string(moves).unwrap(),
-        }
+    pub fn new(moves: Vec<FlatBoardMove>) -> Self {
+        Self { moves }
     }
 }
 
