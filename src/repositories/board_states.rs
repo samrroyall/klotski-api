@@ -26,26 +26,28 @@ impl From<diesel::result::Error> for Error {
     }
 }
 
-pub fn create(pool: &DbPool) -> Result<SelectableBoard, Error> {
+pub fn create(pool: &DbPool) -> Result<Board, Error> {
     let mut conn = pool.get().unwrap();
 
     let new_board_state = InsertableBoard::from(&Board::default());
 
     let result = diesel::insert_into(boards)
         .values(&new_board_state)
-        .get_result(&mut conn)?;
+        .get_result::<SelectableBoard>(&mut conn)?
+        .into_board();
 
     Ok(result)
 }
 
-pub fn get(search_id: i32, pool: &DbPool) -> Result<SelectableBoard, Error> {
+pub fn get(search_id: i32, pool: &DbPool) -> Result<Board, Error> {
     let mut conn = pool.get().unwrap();
 
-    let board_state = boards
+    let board = boards
         .filter(id.eq(search_id))
-        .first::<SelectableBoard>(&mut conn)?;
+        .first::<SelectableBoard>(&mut conn)?
+        .into_board();
 
-    Ok(board_state)
+    Ok(board)
 }
 
 fn get_count(pool: &DbPool) -> i64 {
@@ -68,23 +70,22 @@ pub fn delete(search_id: i32, pool: &DbPool) -> Result<(), Error> {
     Ok(())
 }
 
-pub fn update<F>(search_id: i32, update_fn: F, pool: &DbPool) -> Result<SelectableBoard, Error>
+pub fn update<F>(search_id: i32, update_fn: F, pool: &DbPool) -> Result<Board, Error>
 where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
     let mut conn = pool.get().unwrap();
 
-    let board_record = boards
+    let mut board = boards
         .filter(id.eq(search_id))
-        .first::<SelectableBoard>(&mut conn)?;
-
-    let mut board = board_record.to_board();
+        .first::<SelectableBoard>(&mut conn)?
+        .into_board();
 
     update_fn(&mut board)?;
 
-    let result = diesel::update(boards.filter(id.eq(search_id)))
-        .set(&InsertableBoard::from(&board))
-        .get_result(&mut conn)?;
+    diesel::update(boards.filter(id.eq(search_id)))
+        .set(&InsertableBoard::from(&board.clone()))
+        .execute(&mut conn)?;
 
-    Ok(result)
+    Ok(board)
 }

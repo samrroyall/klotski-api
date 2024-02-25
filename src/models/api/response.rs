@@ -1,12 +1,9 @@
 use serde::Serialize;
 
-use crate::models::{
-    db::tables::SelectableBoard,
-    game::{
-        blocks::Positioned as PositionedBlock,
-        board::{Board as Board_, State as BoardState},
-        moves::{FlatBoardMove, FlatMove},
-    },
+use crate::models::game::{
+    blocks::Positioned as PositionedBlock,
+    board::{Board as Board_, State as BoardState},
+    moves::{FlatBoardMove, FlatMove},
 };
 
 #[derive(Debug, Serialize)]
@@ -19,13 +16,15 @@ pub struct Board {
 }
 
 impl Board {
-    pub fn new(board_record: &SelectableBoard) -> Self {
+    pub fn new(mut board: Board_) -> Self {
+        let next_moves = board.get_next_moves();
+
         Self {
-            id: board_record.id,
-            state: serde_json::from_str(&board_record.state).unwrap(),
-            blocks: serde_json::from_str(&board_record.blocks).unwrap(),
-            grid: serde_json::from_str(&board_record.grid).unwrap(),
-            next_moves: serde_json::from_str(&board_record.next_moves).unwrap(),
+            id: board.id,
+            state: board.state,
+            blocks: board.blocks,
+            grid: board.grid,
+            next_moves,
         }
     }
 }
@@ -36,10 +35,8 @@ pub struct Solved {
 }
 
 impl Solved {
-    pub fn new(moves: &[FlatBoardMove]) -> Self {
-        Self {
-            moves: moves.to_owned(),
-        }
+    pub fn new(moves: Vec<FlatBoardMove>) -> Self {
+        Self { moves }
     }
 }
 

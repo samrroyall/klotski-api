@@ -9,7 +9,6 @@ pub struct InsertableBoard {
     pub blocks: String,
     pub grid: String,
     pub moves: String,
-    pub next_moves: String,
 }
 
 impl InsertableBoard {
@@ -19,7 +18,6 @@ impl InsertableBoard {
             blocks: serde_json::to_string(&board.blocks).unwrap(),
             grid: serde_json::to_string(&board.grid).unwrap(),
             moves: serde_json::to_string(&board.moves).unwrap(),
-            next_moves: serde_json::to_string(&board.next_moves).unwrap(),
         }
     }
 }
@@ -32,17 +30,16 @@ pub struct SelectableBoard {
     pub blocks: String,
     pub grid: String,
     pub moves: String,
-    pub next_moves: String,
 }
 
 impl SelectableBoard {
-    pub fn to_board(&self) -> Board {
+    pub fn into_board(self) -> Board {
         Board::new(
-            serde_json::from_str(&self.state).unwrap(),
-            serde_json::from_str(&self.blocks).unwrap(),
-            serde_json::from_str(&self.grid).unwrap(),
-            serde_json::from_str(&self.moves).unwrap(),
-            serde_json::from_str(&self.next_moves).unwrap(),
+            self.id,
+            serde_json::from_str(self.state.as_str()).unwrap(),
+            serde_json::from_str(self.blocks.as_str()).unwrap(),
+            serde_json::from_str(self.grid.as_str()).unwrap(),
+            serde_json::from_str(self.moves.as_str()).unwrap(),
         )
     }
 }

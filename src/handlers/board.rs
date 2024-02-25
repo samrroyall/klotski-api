@@ -28,12 +28,7 @@ use crate::services::{db::Pool as DbPool, solver::Solver};
 #[debug_handler]
 pub async fn new(Extension(pool): Extension<DbPool>) -> Response {
     create_board_state(&pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new(&board_state)),
-            )
-        })
+        .map(|board| (StatusCode::OK, JsonResponse(BoardResponse::new(board))))
         .map_err(handle_board_state_repository_error)
         .into_response()
 }
@@ -43,12 +38,7 @@ where
     F: FnOnce(&mut Board) -> Result<(), BoardError>,
 {
     update_board_state(board_id, update_fn, pool)
-        .map(|board_state| {
-            (
-                StatusCode::OK,
-                JsonResponse(BoardResponse::new(&board_state)),
-            )
-        })
+        .map(|board| (StatusCode::OK, JsonResponse(BoardResponse::new(board))))
         .map_err(handle_board_state_repository_error)
         .into_response()
 }
@@ -98,21 +88,25 @@ pub async fn solve(
 
     let params = path_extraction.unwrap().0;
 
-    get_board_state(params.board_id, &pool)
-        .map_err(handle_board_state_repository_error)
-        .and_then(|board_state| {
-            Solver::new(&mut board_state.to_board()).map_err(handle_board_error)
-        })
-        .and_then(|mut solver| solver.solve().map_err(handle_board_error))
-        .map(|maybe_moves| {
-            (
-                StatusCode::OK,
-                JsonResponse(match maybe_moves {
-                    Some(moves) => SolveResponse::Solved(SolvedResponse::new(&moves)),
-                    None => SolveResponse::UnableToSolve,
-                }),
-            )
-        })
+    let board = get_board_state(params.board_id, &pool);
+
+    if board.is_err() {
+        return handle_board_state_repository_error(board.err().unwrap()).into_response();
+    }
+
+    let moves = Solver::new(&board.unwrap()).map(|mut solver| solver.solve());
+
+    if moves.is_err() {
+        return handle_board_error(moves.err().unwrap()).into_response();
+    }
+
+    (
+        StatusCode::OK,
+        JsonResponse(match moves.unwrap() {
+            Some(moves) => SolveResponse::Solved(SolvedResponse::new(moves)),
+            None => SolveResponse::UnableToSolve,
+        }),
+    )
         .into_response()
 }
 

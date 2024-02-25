@@ -12,67 +12,61 @@ pub struct Solver {
 }
 
 impl Solver {
-    fn bfs(&mut self) -> Result<Option<Board>, BoardError> {
-        let root = self.start_board.clone();
-
-        if root.is_solved() {
-            return Ok(Some(root));
-        }
-
-        let mut queue: VecDeque<Board> = VecDeque::from([root]);
+    fn bfs(&mut self) -> Option<Board> {
+        let mut queue: VecDeque<Board> = VecDeque::from([self.start_board.clone()]);
 
         while !queue.is_empty() {
             let queue_size = queue.len();
 
             for _ in 0..queue_size {
-                let curr_board = queue.pop_front().unwrap();
+                let mut curr_board = queue.pop_front().unwrap();
 
-                for (block_idx, moves) in curr_board.next_moves.iter().enumerate() {
+                if curr_board.state == BoardState::Solved {
+                    return Some(curr_board);
+                }
+
+                let next_moves = curr_board.get_next_moves();
+
+                for (block_idx, moves) in next_moves.into_iter().enumerate() {
                     for move_ in moves {
-                        let mut child_board = curr_board.clone();
+                        curr_board.move_block_unchecked(block_idx, move_.row_diff, move_.col_diff);
 
-                        child_board.move_block(block_idx, move_.row_diff, move_.col_diff)?;
+                        let hash = curr_board.hash();
 
-                        if child_board.state == BoardState::Solved {
-                            return Ok(Some(child_board));
+                        if !self.seen.contains(&hash) {
+                            self.seen.insert(hash);
+
+                            queue.push_back(curr_board.clone());
                         }
 
-                        let hash = child_board.hash();
-
-                        if self.seen.contains(&hash) {
-                            continue;
-                        }
-
-                        self.seen.insert(hash);
-
-                        queue.push_back(child_board);
+                        curr_board.undo_move().unwrap();
                     }
                 }
             }
         }
 
-        Ok(None)
+        None
     }
 }
 
 impl Solver {
-    pub fn new(start_board: &mut Board) -> Result<Self, BoardError> {
+    pub fn new(board: &Board) -> Result<Self, BoardError> {
+        let mut start_board = board.clone();
+
         start_board.change_state(&BoardState::Solving)?;
 
+        start_board.moves.clear();
+
+        let _board_is_already_solved = start_board.change_state(&BoardState::Solved).is_ok();
+
         Ok(Self {
-            start_board: start_board.clone(),
+            start_board,
             seen: HashSet::<String>::new(),
         })
     }
 
-    pub fn solve(&mut self) -> Result<Option<Vec<FlatBoardMove>>, BoardError> {
-        let maybe_solved_board = self.bfs()?;
-
-        if let Some(solved_board) = maybe_solved_board {
-            return Ok(Some(solved_board.moves));
-        }
-
-        Ok(None)
+    pub fn solve(&mut self) -> Option<Vec<FlatBoardMove>> {
+        self.bfs().map(|solved_board| solved_board.moves)
     }
 }
 
@@ -96,7 +90,7 @@ mod tests {
         }
 
         let mut solver = Solver::new(&mut board).unwrap();
-        let moves = solver.solve().unwrap().unwrap();
+        let moves = solver.solve().unwrap();
 
         assert_eq!(moves.len(), expected_moves);
     }
@@ -109,7 +103,7 @@ mod tests {
         }
 
         let mut solver = Solver::new(&mut board).unwrap();
-        let moves = solver.solve().unwrap().unwrap();
+        let moves = solver.solve().unwrap();
 
         for move_ in moves.iter() {
             board
