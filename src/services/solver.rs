@@ -1,4 +1,6 @@
 use std::collections::{HashSet, VecDeque};
+use std::sync::{Arc, Mutex};
+use std::thread;
 
 use crate::errors::board::Error as BoardError;
 use crate::models::game::{
@@ -8,39 +10,78 @@ use crate::models::game::{
 
 pub struct Solver {
     start_board: Board,
-    seen: HashSet<u64>,
+    seen: Arc<Mutex<HashSet<u64>>>,
 }
 
 impl Solver {
-    fn bfs(&mut self) -> Option<Board> {
-        let mut queue: VecDeque<Board> = VecDeque::from([self.start_board.clone()]);
+    const NUM_THREADS: usize = 4;
 
-        while !queue.is_empty() {
-            let queue_size = queue.len();
+    fn process_sub_level(
+        batch_size: usize,
+        queue: &Arc<Mutex<VecDeque<Board>>>,
+        seen: &Arc<Mutex<HashSet<u64>>>,
+    ) -> Option<Board> {
+        for _ in 0..batch_size {
+            let mut board = queue.lock().unwrap().pop_front().unwrap();
 
-            for _ in 0..queue_size {
-                let mut curr_board = queue.pop_front().unwrap();
+            if board.state == BoardState::Solved {
+                return Some(board);
+            }
 
-                if curr_board.state == BoardState::Solved {
-                    return Some(curr_board);
-                }
+            let next_moves = board.get_next_moves();
 
-                let next_moves = curr_board.get_next_moves();
+            for (block_idx, moves) in next_moves.into_iter().enumerate() {
+                for move_ in moves {
+                    board.move_block_unchecked(block_idx, move_.row_diff, move_.col_diff);
 
-                for (block_idx, moves) in next_moves.into_iter().enumerate() {
-                    for move_ in moves {
-                        curr_board.move_block_unchecked(block_idx, move_.row_diff, move_.col_diff);
-
-                        let hash = curr_board.hash();
-
-                        if !self.seen.contains(&hash) {
-                            self.seen.insert(hash);
-
-                            queue.push_back(curr_board.clone());
-                        }
-
-                        curr_board.undo_move().unwrap();
+                    if seen.lock().unwrap().insert(board.hash()) {
+                        queue.lock().unwrap().push_back(board.clone());
                     }
+
+                    board.undo_move_unchecked();
+                }
+            }
+        }
+
+        None
+    }
+
+    fn parallel_bfs(&mut self) -> Option<Board> {
+        let root = self.start_board.clone();
+
+        if root.state == BoardState::Solved {
+            return Some(root);
+        }
+
+        let queue: Arc<Mutex<VecDeque<Board>>> = Arc::new(Mutex::new(VecDeque::new()));
+
+        queue.lock().unwrap().push_back(root);
+
+        while !queue.lock().unwrap().is_empty() {
+            let mut level_size = queue.lock().unwrap().len();
+
+            let batch_size = (level_size + Self::NUM_THREADS - 1) / Self::NUM_THREADS;
+
+            let mut handles = vec![];
+
+            for _ in 0..Self::NUM_THREADS {
+                let curr_batch_size = batch_size.min(level_size);
+
+                let queue_clone = Arc::clone(&queue);
+                let seen_clone = Arc::clone(&self.seen);
+
+                let handle = thread::spawn(move || {
+                    Solver::process_sub_level(curr_batch_size, &queue_clone, &seen_clone)
+                });
+
+                level_size -= curr_batch_size;
+
+                handles.push(handle);
+            }
+
+            for handle in handles {
+                if let Some(solved_board) = handle.join().unwrap() {
+                    return Some(solved_board);
                 }
             }
         }
@@ -61,12 +102,12 @@ impl Solver {
 
         Ok(Self {
             start_board,
-            seen: HashSet::<u64>::new(),
+            seen: Arc::new(Mutex::new(HashSet::<u64>::new())),
         })
     }
 
     pub fn solve(&mut self) -> Option<Vec<FlatBoardMove>> {
-        self.bfs().map(|solved_board| solved_board.moves)
+        self.parallel_bfs().map(|solved_board| solved_board.moves)
     }
 }
 
