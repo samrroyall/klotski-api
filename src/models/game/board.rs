@@ -816,6 +816,63 @@ mod tests {
     }
 
     #[test]
+    fn move_block_unchecked() {
+        let mut board = Board::default();
+
+        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, block_one.block_id);
+        board.blocks.push(block_one);
+        board.state = State::Solving;
+
+        board.move_block_unchecked(0, 0, 1);
+
+        assert_eq!(
+            board.grid,
+            [
+                [0, 1, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+            ]
+        );
+
+        board.move_block_unchecked(0, 1, 0);
+        board.move_block_unchecked(0, 0, -1);
+
+        let block_two = PositionedBlock::new(4, 3, 2).unwrap();
+        board.update_grid_range(&block_two.range, block_two.block_id);
+        board.blocks.push(block_two);
+
+        assert_eq!(
+            board.grid,
+            [
+                [0, 0, 0, 0],
+                [1, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 4, 4],
+                [0, 0, 4, 4],
+            ]
+        );
+
+        board.move_block_unchecked(1, 0, -2);
+        board.move_block_unchecked(1, -1, 1);
+        board.move_block_unchecked(1, -1, 0);
+        board.move_block_unchecked(1, 0, -1);
+
+        assert_eq!(
+            board.grid,
+            [
+                [0, 0, 0, 0],
+                [4, 4, 0, 0],
+                [4, 4, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+            ]
+        );
+    }
+
+    #[test]
     fn move_block() {
         let mut board = Board::default();
 
@@ -889,6 +946,14 @@ mod tests {
                 [0, 0, 0, 0],
             ]
         );
+    }
+
+    #[test]
+    #[should_panic]
+    fn undo_move_unchecked() {
+        let mut board = Board::default();
+
+        board.undo_move_unchecked();
     }
 
     #[test]
