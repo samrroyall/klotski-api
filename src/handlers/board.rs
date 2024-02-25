@@ -145,7 +145,7 @@ pub async fn add_block(
     let body = json_extraction.unwrap().0;
 
     let update_fn = |board: &mut Board| {
-        if let Some(block) = PositionedBlock::new(body.block_id, body.min_row, body.min_col) {
+        if let Some(block) = PositionedBlock::new(body.block, body.min_row, body.min_col) {
             return board.add_block(block);
         }
         Err(BoardError::BlockInvalid)
@@ -174,7 +174,7 @@ pub async fn alter_block(
     match body {
         AlterBlockRequest::ChangeBlock(data) => update(
             params.board_id,
-            |board: &mut Board| board.change_block(params.block_idx, data.new_block_id),
+            |board: &mut Board| board.change_block(params.block_idx, data.new_block),
             &pool,
         ),
         AlterBlockRequest::MoveBlock(data) => update(

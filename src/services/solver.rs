@@ -8,7 +8,7 @@ use crate::models::game::{
 
 pub struct Solver {
     start_board: Board,
-    seen: HashSet<String>,
+    seen: HashSet<u64>,
 }
 
 impl Solver {
@@ -61,7 +61,7 @@ impl Solver {
 
         Ok(Self {
             start_board,
-            seen: HashSet::<String>::new(),
+            seen: HashSet::<u64>::new(),
         })
     }
 
@@ -73,7 +73,10 @@ impl Solver {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::models::game::{blocks::Positioned as PositionedBlock, board::Board};
+    use crate::models::game::{
+        blocks::{Block, Positioned as PositionedBlock},
+        board::Board,
+    };
 
     #[test]
     fn test_not_ready_board() {
@@ -117,15 +120,15 @@ mod tests {
     #[test]
     fn test_solved_board() {
         let blocks = [
-            PositionedBlock::new(2, 0, 0).unwrap(),
-            PositionedBlock::new(2, 0, 2).unwrap(),
-            PositionedBlock::new(2, 1, 0).unwrap(),
-            PositionedBlock::new(2, 1, 2).unwrap(),
-            PositionedBlock::new(2, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(4, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 0, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 0, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 1, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 0);
@@ -134,16 +137,16 @@ mod tests {
     #[test]
     fn test_classic_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -152,16 +155,16 @@ mod tests {
     #[test]
     fn test_classic_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 81);
@@ -170,19 +173,19 @@ mod tests {
     #[test]
     fn test_easy_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(1, 2, 1).unwrap(),
-            PositionedBlock::new(1, 2, 2).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 2).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -191,19 +194,19 @@ mod tests {
     #[test]
     fn test_easy_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(1, 2, 1).unwrap(),
-            PositionedBlock::new(1, 2, 2).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 2, 2).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 17);
@@ -212,16 +215,16 @@ mod tests {
     #[test]
     fn test_medium_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(3, 2, 1).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(2, 3, 2).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -230,16 +233,16 @@ mod tests {
     #[test]
     fn test_medium_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(1, 1, 0).unwrap(),
-            PositionedBlock::new(1, 1, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(3, 2, 1).unwrap(),
-            PositionedBlock::new(2, 2, 2).unwrap(),
-            PositionedBlock::new(2, 3, 2).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 40);
@@ -248,16 +251,16 @@ mod tests {
     #[test]
     fn test_hard_board_solution_works() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(3, 1, 0).unwrap(),
-            PositionedBlock::new(3, 1, 3).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_solution_works(&blocks);
@@ -266,16 +269,16 @@ mod tests {
     #[test]
     fn test_hard_board_is_optimal() {
         let blocks = [
-            PositionedBlock::new(1, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(1, 0, 3).unwrap(),
-            PositionedBlock::new(3, 1, 0).unwrap(),
-            PositionedBlock::new(3, 1, 3).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(1, 3, 0).unwrap(),
-            PositionedBlock::new(1, 3, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(2, 4, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 1, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 4, 1).unwrap(),
         ];
 
         test_board_is_optimal(&blocks, 120);

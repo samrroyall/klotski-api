@@ -1,6 +1,6 @@
 use serde::Deserialize;
 
-use crate::models::game::board::State as BoardState;
+use crate::models::game::{blocks::Block, board::State as BoardState};
 
 #[derive(Debug, Deserialize)]
 pub struct BoardParams {
@@ -15,14 +15,14 @@ pub struct BlockParams {
 
 #[derive(Debug, Deserialize)]
 pub struct AddBlock {
-    pub block_id: u8,
+    pub block: Block,
     pub min_row: u8,
     pub min_col: u8,
 }
 
 #[derive(Debug, Deserialize)]
 pub struct ChangeBlock {
-    pub new_block_id: u8,
+    pub new_block: Block,
 }
 
 #[derive(Debug, Deserialize)]

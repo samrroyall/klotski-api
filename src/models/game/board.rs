@@ -1,7 +1,12 @@
+use std::{
+    collections::hash_map::DefaultHasher,
+    hash::{Hash, Hasher},
+};
+
 use serde::{Deserialize, Serialize};
 
 use super::{
-    blocks::Positioned as PositionedBlock,
+    blocks::{Block, Positioned as PositionedBlock},
     moves::{FlatBoardMove, FlatMove, Step},
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
@@ -20,7 +25,7 @@ pub struct Board {
     pub id: i32,
     pub state: State,
     pub blocks: Vec<PositionedBlock>,
-    pub grid: [[u8; Self::COLS as usize]; Self::ROWS as usize],
+    pub grid: [Option<Block>; (Self::ROWS * Self::COLS) as usize],
     pub moves: Vec<FlatBoardMove>,
 }
 
@@ -30,7 +35,7 @@ impl Default for Board {
             0,
             State::Building,
             vec![],
-            [[0; Self::COLS as usize]; Self::ROWS as usize],
+            [None; (Self::COLS * Self::ROWS) as usize],
             vec![],
         )
     }
@@ -41,42 +46,30 @@ impl Board {
     pub const COLS: u8 = 4;
     pub const NUM_EMPTY_CELLS: u8 = 2;
 
-    const WINNING_BLOCK_ID: u8 = 4;
+    const WINNING_BLOCK: Block = Block::TwoByTwo;
     const WINNING_ROW: u8 = 3;
     const WINNING_COL: u8 = 1;
 
     fn is_ready_to_solve(&self) -> bool {
-        let num_winning_blocks = self.blocks.iter().fold(0, |acc, curr| {
-            acc + u8::from(curr.block_id == Self::WINNING_BLOCK_ID)
-        });
-
-        if num_winning_blocks != 1 {
-            return false;
-        }
-
-        let empty_cells = self
-            .grid
+        self.blocks
             .iter()
-            .flatten()
-            .fold(0, |acc, &block_id| acc + u8::from(block_id == 0));
-
-        empty_cells == Self::NUM_EMPTY_CELLS
+            .filter(|positioned_block| positioned_block.block == Self::WINNING_BLOCK)
+            .count()
+            == 1
+            && self.grid.iter().filter(|cell| cell.is_none()).count()
+                == usize::from(Self::NUM_EMPTY_CELLS)
     }
 
-    fn update_grid_range(&mut self, range: &Vec<(u8, u8)>, value: u8) {
-        for (i, j) in range {
-            self.grid[usize::from(*i)][usize::from(*j)] = value;
-        }
+    fn update_grid_range(&mut self, range: &[(u8, u8)], value: Option<Block>) {
+        range
+            .iter()
+            .for_each(|(i, j)| self.grid[usize::from(i * Self::COLS + j)] = value);
     }
 
-    fn is_range_empty(&self, range: &Vec<(u8, u8)>) -> bool {
-        for (i, j) in range {
-            if self.grid[usize::from(*i)][usize::from(*j)] != 0 {
-                return false;
-            }
-        }
-
-        true
+    fn is_range_empty(&self, range: &[(u8, u8)]) -> bool {
+        range
+            .iter()
+            .all(|(i, j)| self.grid[usize::from(i * Self::COLS + j)].is_none())
     }
 
     fn is_step_valid_for_block(&self, block: &PositionedBlock, step: &Step) -> bool {
@@ -86,13 +79,13 @@ impl Board {
                     .ok()
                     .is_some_and(|row_above| {
                         Position::new(row_above, col).is_some_and(|new_position| {
-                            0 == self.grid[usize::from(new_position.row)][usize::from(col)]
+                            self.grid[usize::from(new_position.row * Self::COLS + col)].is_none()
                         })
                     })
             }),
             Step::Down => (block.min_position.col..=block.max_position.col).all(|col| {
                 Position::new(block.max_position.row + 1, col).is_some_and(|new_position| {
-                    0 == self.grid[usize::from(new_position.row)][usize::from(col)]
+                    self.grid[usize::from(new_position.row * Self::COLS + col)].is_none()
                 })
             }),
             Step::Left => (block.min_position.row..=block.max_position.row).all(|row| {
@@ -100,13 +93,13 @@ impl Board {
                     .ok()
                     .is_some_and(|col_above| {
                         Position::new(row, col_above).is_some_and(|new_position| {
-                            0 == self.grid[usize::from(row)][usize::from(new_position.col)]
+                            self.grid[usize::from(row * Self::COLS + new_position.col)].is_none()
                         })
                     })
             }),
             Step::Right => (block.min_position.row..=block.max_position.row).all(|row| {
                 Position::new(row, block.max_position.col + 1).is_some_and(|new_position| {
-                    0 == self.grid[usize::from(row)][usize::from(new_position.col)]
+                    self.grid[usize::from(row * Self::COLS + new_position.col)].is_none()
                 })
             }),
         }
@@ -156,7 +149,7 @@ impl Board {
         id: i32,
         state: State,
         blocks: Vec<PositionedBlock>,
-        grid: [[u8; Self::COLS as usize]; Self::ROWS as usize],
+        grid: [Option<Block>; (Self::COLS * Self::ROWS) as usize],
         moves: Vec<FlatBoardMove>,
     ) -> Self {
         Self {
@@ -168,12 +161,10 @@ impl Board {
         }
     }
 
-    pub fn hash(&self) -> String {
-        self.grid
-            .iter()
-            .flatten()
-            .map(|&cell| char::from_digit(u32::from(cell), 10).unwrap())
-            .collect()
+    pub fn hash(&self) -> u64 {
+        let mut hasher = DefaultHasher::new();
+        self.grid.hash(&mut hasher);
+        hasher.finish()
     }
 
     pub fn change_state(&mut self, new_state: &State) -> Result<(), BoardError> {
@@ -215,7 +206,7 @@ impl Board {
 
     pub fn is_solved(&self) -> bool {
         self.blocks.iter().any(|block| {
-            block.block_id == Self::WINNING_BLOCK_ID
+            block.block == Self::WINNING_BLOCK
                 && block.min_position.row == Self::WINNING_ROW
                 && block.min_position.col == Self::WINNING_COL
         })
@@ -230,7 +221,7 @@ impl Board {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_grid_range(&block.range, block.block_id);
+        self.update_grid_range(&block.range, Some(block.block));
 
         self.blocks.push(block);
 
@@ -239,36 +230,42 @@ impl Board {
         Ok(())
     }
 
-    pub fn change_block(&mut self, block_idx: usize, new_block_id: u8) -> Result<(), BoardError> {
+    pub fn change_block(&mut self, block_idx: usize, new_block: Block) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(&State::Building)?;
         }
 
-        let block = self
+        let positioned_block = self
             .blocks
             .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        if block.block_id == new_block_id {
+        if positioned_block.block == new_block {
             return Ok(());
         }
 
-        let new_block =
-            PositionedBlock::new(new_block_id, block.min_position.row, block.min_position.col)
-                .ok_or(BoardError::BlockPlacementInvalid)?;
+        let new_positioned_block = PositionedBlock::new(
+            new_block,
+            positioned_block.min_position.row,
+            positioned_block.min_position.col,
+        )
+        .ok_or(BoardError::BlockPlacementInvalid)?;
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&positioned_block.range, None);
 
-        if !self.is_range_empty(&new_block.range) {
-            self.update_grid_range(&block.range, block.block_id);
+        if !self.is_range_empty(&new_positioned_block.range) {
+            self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
 
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_grid_range(&new_block.range, new_block.block_id);
+        self.update_grid_range(
+            &new_positioned_block.range,
+            Some(new_positioned_block.block),
+        );
 
-        self.blocks[block_idx] = new_block;
+        self.blocks[block_idx] = new_positioned_block;
 
         let _is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
 
@@ -291,13 +288,13 @@ impl Board {
             return Err(BoardError::BoardStateInvalid);
         }
 
-        let block = self
+        let positioned_block = self
             .blocks
             .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&positioned_block.range, None);
 
         self.blocks.swap_remove(block_idx);
 
@@ -307,15 +304,15 @@ impl Board {
     }
 
     pub fn move_block_unchecked(&mut self, block_idx: usize, row_diff: i8, col_diff: i8) {
-        let mut block = self.blocks.get(block_idx).cloned().unwrap();
+        let mut positioned_block = self.blocks.get(block_idx).cloned().unwrap();
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&positioned_block.range, None);
 
-        block.move_by(row_diff, col_diff).unwrap();
+        positioned_block.move_by(row_diff, col_diff).unwrap();
 
-        self.update_grid_range(&block.range, block.block_id);
+        self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
 
-        self.blocks[block_idx] = block;
+        self.blocks[block_idx] = positioned_block;
 
         self.moves.push(FlatBoardMove::new(
             block_idx,
@@ -347,23 +344,23 @@ impl Board {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        let mut block = self
+        let mut positioned_block = self
             .blocks
             .get(block_idx)
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&positioned_block.range, None);
 
-        if block.move_by(row_diff, col_diff).is_err() {
-            self.update_grid_range(&block.range, block.block_id);
+        if positioned_block.move_by(row_diff, col_diff).is_err() {
+            self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
 
             return Err(BoardError::BlockPlacementInvalid);
         };
 
-        self.update_grid_range(&block.range, block.block_id);
+        self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
 
-        self.blocks[block_idx] = block;
+        self.blocks[block_idx] = positioned_block;
 
         self.moves.push(FlatBoardMove::new(
             block_idx,
@@ -380,13 +377,13 @@ impl Board {
 
         let mut block = self.blocks.get(opposite_move.block_idx).cloned().unwrap();
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&block.range, None);
 
         block
             .move_by(opposite_move.row_diff, opposite_move.col_diff)
             .unwrap();
 
-        self.update_grid_range(&block.range, block.block_id);
+        self.update_grid_range(&block.range, Some(block.block));
 
         self.blocks[opposite_move.block_idx] = block;
 
@@ -410,18 +407,18 @@ impl Board {
             .cloned()
             .ok_or(BoardError::BlockIndexOutOfBounds)?;
 
-        self.update_grid_range(&block.range, 0);
+        self.update_grid_range(&block.range, None);
 
         if block
             .move_by(opposite_move.row_diff, opposite_move.col_diff)
             .is_err()
         {
-            self.update_grid_range(&block.range, block.block_id);
+            self.update_grid_range(&block.range, Some(block.block));
 
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_grid_range(&block.range, block.block_id);
+        self.update_grid_range(&block.range, Some(block.block));
 
         self.blocks[opposite_move.block_idx] = block;
 
@@ -449,24 +446,24 @@ mod tests {
     fn update_grid_range() {
         let mut board = Board::default();
 
-        let block = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block.range, block.block_id);
+        let block = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block.range, Some(block.block));
 
-        assert_eq!(board.grid[0][0], block.block_id);
+        assert_eq!(board.grid[0], Some(block.block));
 
-        board.update_grid_range(&block.range, 0);
+        board.update_grid_range(&block.range, None);
 
-        assert_eq!(board.grid[0][0], 0);
+        assert_eq!(board.grid[0], None);
     }
 
     #[test]
     fn is_range_empty() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
 
-        let block_two = PositionedBlock::new(2, 1, 0).unwrap();
+        let block_two = PositionedBlock::new(Block::OneByTwo, 1, 0).unwrap();
 
         assert!(!board.is_range_empty(&block_one.range));
         assert!(board.is_range_empty(&block_two.range));
@@ -476,11 +473,11 @@ mod tests {
     fn is_step_valid_for_block() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
 
-        let block_two = PositionedBlock::new(2, 0, 1).unwrap();
-        board.update_grid_range(&block_two.range, block_two.block_id);
+        let block_two = PositionedBlock::new(Block::OneByTwo, 0, 1).unwrap();
+        board.update_grid_range(&block_two.range, Some(block_two.block));
 
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Left));
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Right));
@@ -492,8 +489,8 @@ mod tests {
         assert!(board.is_step_valid_for_block(&block_two, &Step::Right));
         assert!(board.is_step_valid_for_block(&block_two, &Step::Down));
 
-        let block_three = PositionedBlock::new(1, 1, 0).unwrap();
-        board.update_grid_range(&block_three.range, block_three.block_id);
+        let block_three = PositionedBlock::new(Block::OneByOne, 1, 0).unwrap();
+        board.update_grid_range(&block_three.range, Some(block_three.block));
 
         assert!(!board.is_step_valid_for_block(&block_one, &Step::Down));
 
@@ -505,11 +502,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [1, 2, 2, 0],
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                Some(Block::OneByOne),
+                Some(Block::OneByTwo),
+                Some(Block::OneByTwo),
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         )
     }
@@ -518,14 +530,14 @@ mod tests {
     fn get_next_moves_for_block_down_right() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
 
-        let block_two = PositionedBlock::new(1, 0, 1).unwrap();
-        board.update_grid_range(&block_two.range, block_two.block_id);
+        let block_two = PositionedBlock::new(Block::OneByOne, 0, 1).unwrap();
+        board.update_grid_range(&block_two.range, Some(block_two.block));
 
-        let block_three = PositionedBlock::new(1, 1, 0).unwrap();
-        board.update_grid_range(&block_three.range, block_three.block_id);
+        let block_three = PositionedBlock::new(Block::OneByOne, 1, 0).unwrap();
+        board.update_grid_range(&block_three.range, Some(block_three.block));
 
         let block_one_moves = board.get_next_moves_for_block(&block_one);
 
@@ -536,11 +548,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [1, 1, 0, 0],
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                Some(Block::OneByOne),
+                Some(Block::OneByOne),
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -566,14 +593,14 @@ mod tests {
     fn get_next_moves_for_block_up_left() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 4, 3).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 4, 3).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
 
-        let block_two = PositionedBlock::new(1, 4, 2).unwrap();
-        board.update_grid_range(&block_two.range, block_two.block_id);
+        let block_two = PositionedBlock::new(Block::OneByOne, 4, 2).unwrap();
+        board.update_grid_range(&block_two.range, Some(block_two.block));
 
-        let block_three = PositionedBlock::new(1, 3, 3).unwrap();
-        board.update_grid_range(&block_three.range, block_three.block_id);
+        let block_three = PositionedBlock::new(Block::OneByOne, 3, 3).unwrap();
+        board.update_grid_range(&block_three.range, Some(block_three.block));
 
         let block_one_moves = board.get_next_moves_for_block(&block_one);
 
@@ -584,11 +611,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 1],
-                [0, 0, 1, 1],
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                Some(Block::OneByOne),
+                Some(Block::OneByOne),
             ]
         );
 
@@ -611,16 +653,16 @@ mod tests {
     #[test]
     fn get_next_moves() {
         let blocks = vec![
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(1, 3, 1).unwrap(),
-            PositionedBlock::new(1, 3, 2).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         let mut board = Board::default();
@@ -656,23 +698,23 @@ mod tests {
     fn hash() {
         let mut board = Board::default();
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         for block in blocks.iter() {
-            board.update_grid_range(&block.range, block.block_id);
+            board.update_grid_range(&block.range, Some(block.block));
             board.blocks.push(block.clone());
         }
 
-        assert_eq!(board.hash(), String::from("34433443322332231001"),);
+        assert_eq!(board.hash(), 9403663965540605277);
     }
 
     #[test]
@@ -683,19 +725,19 @@ mod tests {
         assert!(board.change_state(&State::Solving).is_err());
 
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
-            PositionedBlock::new(1, 4, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
         ];
 
         for block in blocks.iter() {
-            board.update_grid_range(&block.range, block.block_id);
+            board.update_grid_range(&block.range, Some(block.block));
             board.blocks.push(block.clone());
         }
 
@@ -717,25 +759,25 @@ mod tests {
     fn is_ready_to_solve() {
         let mut board = Board::default();
         let blocks = [
-            PositionedBlock::new(3, 0, 0).unwrap(),
-            PositionedBlock::new(3, 0, 3).unwrap(),
-            PositionedBlock::new(4, 0, 1).unwrap(),
-            PositionedBlock::new(3, 2, 0).unwrap(),
-            PositionedBlock::new(2, 2, 1).unwrap(),
-            PositionedBlock::new(3, 2, 3).unwrap(),
-            PositionedBlock::new(2, 3, 1).unwrap(),
-            PositionedBlock::new(1, 4, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
         ];
-        let final_block = PositionedBlock::new(1, 4, 3).unwrap();
+        let final_block = PositionedBlock::new(Block::OneByOne, 4, 3).unwrap();
 
         for block in blocks.iter() {
-            board.update_grid_range(&block.range, block.block_id);
+            board.update_grid_range(&block.range, Some(block.block));
             board.blocks.push(block.clone());
 
             assert!(!board.is_ready_to_solve());
         }
 
-        board.update_grid_range(&final_block.range, final_block.block_id);
+        board.update_grid_range(&final_block.range, Some(final_block.block));
         board.blocks.push(final_block);
 
         assert!(board.is_ready_to_solve());
@@ -744,7 +786,7 @@ mod tests {
     #[test]
     fn is_solved() {
         let mut board = Board::default();
-        let mut block = PositionedBlock::new(4, 2, 1).unwrap();
+        let mut block = PositionedBlock::new(Block::TwoByTwo, 2, 1).unwrap();
         board.blocks.push(block.clone());
 
         assert!(!board.is_solved());
@@ -759,22 +801,37 @@ mod tests {
     fn add_block() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(2, 0, 0).unwrap();
+        let block_one = PositionedBlock::new(Block::OneByTwo, 0, 0).unwrap();
 
         assert!(board.add_block(block_one).is_ok());
         assert_eq!(board.blocks.len(), 1);
         assert_eq!(
             board.grid,
             [
-                [2, 2, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0]
+                Some(Block::OneByTwo),
+                Some(Block::OneByTwo),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None
             ]
         );
 
-        let block_two = PositionedBlock::new(2, 0, 1).unwrap();
+        let block_two = PositionedBlock::new(Block::OneByTwo, 0, 1).unwrap();
 
         assert!(board.add_block(block_two).is_err());
     }
@@ -783,13 +840,13 @@ mod tests {
     fn remove_block() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(2, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByTwo, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
         board.blocks.push(block_one.clone());
 
         assert!(board.remove_block(0).is_ok());
         assert_eq!(board.blocks.len(), 0);
-        assert_eq!(board.grid, [[0; 4]; 5]);
+        assert_eq!(board.grid, [None; 20]);
         assert!(board.remove_block(0).is_err());
     }
 
@@ -797,30 +854,45 @@ mod tests {
     fn change_block() {
         let mut board = Board::default();
 
-        let block = PositionedBlock::new(2, 0, 0).unwrap();
-        board.update_grid_range(&block.range, block.block_id);
+        let block = PositionedBlock::new(Block::OneByTwo, 0, 0).unwrap();
+        board.update_grid_range(&block.range, Some(block.block));
         board.blocks.push(block);
 
-        assert!(board.change_block(0, 1).is_ok());
+        assert!(board.change_block(0, Block::OneByOne).is_ok());
         assert_eq!(
             board.grid,
             [
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
-        assert!(board.change_block(1, 1).is_err());
+        assert!(board.change_block(1, Block::OneByOne).is_err());
     }
 
     #[test]
     fn move_block_unchecked() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
         board.blocks.push(block_one);
         board.state = State::Solving;
 
@@ -829,29 +901,59 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 1, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
         board.move_block_unchecked(0, 1, 0);
         board.move_block_unchecked(0, 0, -1);
 
-        let block_two = PositionedBlock::new(4, 3, 2).unwrap();
-        board.update_grid_range(&block_two.range, block_two.block_id);
+        let block_two = PositionedBlock::new(Block::TwoByTwo, 3, 2).unwrap();
+        board.update_grid_range(&block_two.range, Some(block_two.block));
         board.blocks.push(block_two);
 
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 4, 4],
-                [0, 0, 4, 4],
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
             ]
         );
 
@@ -863,11 +965,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [4, 4, 0, 0],
-                [4, 4, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                None,
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
     }
@@ -876,8 +993,8 @@ mod tests {
     fn move_block() {
         let mut board = Board::default();
 
-        let block_one = PositionedBlock::new(1, 0, 0).unwrap();
-        board.update_grid_range(&block_one.range, block_one.block_id);
+        let block_one = PositionedBlock::new(Block::OneByOne, 0, 0).unwrap();
+        board.update_grid_range(&block_one.range, Some(block_one.block));
         board.blocks.push(block_one);
         board.state = State::Solving;
 
@@ -886,11 +1003,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 1, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -905,18 +1037,33 @@ mod tests {
             Err(BoardError::BlockPlacementInvalid)
         );
 
-        let block_two = PositionedBlock::new(4, 3, 2).unwrap();
-        board.update_grid_range(&block_two.range, block_two.block_id);
+        let block_two = PositionedBlock::new(Block::TwoByTwo, 3, 2).unwrap();
+        board.update_grid_range(&block_two.range, Some(block_two.block));
         board.blocks.push(block_two);
 
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 4, 4],
-                [0, 0, 4, 4],
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
             ]
         );
 
@@ -939,11 +1086,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [1, 4, 4, 0],
-                [0, 4, 4, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                Some(Block::TwoByTwo),
+                Some(Block::TwoByTwo),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
     }
@@ -960,8 +1122,8 @@ mod tests {
     fn undo_move() {
         let mut board = Board::default();
 
-        let block = PositionedBlock::new(1, 2, 0).unwrap();
-        board.update_grid_range(&block.range, block.block_id);
+        let block = PositionedBlock::new(Block::OneByOne, 2, 0).unwrap();
+        board.update_grid_range(&block.range, Some(block.block));
         board.blocks.push(block);
         board.state = State::Solving;
         board.moves = vec![
@@ -976,11 +1138,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -989,11 +1166,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 0, 0, 0],
-                [0, 1, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                None,
+                None,
+                None,
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -1002,11 +1194,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [0, 1, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                None,
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -1015,11 +1222,26 @@ mod tests {
         assert_eq!(
             board.grid,
             [
-                [1, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
-                [0, 0, 0, 0],
+                Some(Block::OneByOne),
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
+                None,
             ]
         );
 
@@ -1030,8 +1252,8 @@ mod tests {
     fn reset() {
         let mut board = Board::default();
 
-        let block = PositionedBlock::new(1, 2, 0).unwrap();
-        board.update_grid_range(&block.range, block.block_id);
+        let block = PositionedBlock::new(Block::OneByOne, 2, 0).unwrap();
+        board.update_grid_range(&block.range, Some(block.block));
         board.blocks.push(block);
         board.state = State::Solving;
         board.moves = vec![

@@ -1,7 +1,7 @@
 use serde::Serialize;
 
 use crate::models::game::{
-    blocks::Positioned as PositionedBlock,
+    blocks::{Block, Positioned as PositionedBlock},
     board::{Board as Board_, State as BoardState},
     moves::{FlatBoardMove, FlatMove},
 };
@@ -11,7 +11,7 @@ pub struct Board {
     id: i32,
     state: BoardState,
     blocks: Vec<PositionedBlock>,
-    grid: [[u8; Board_::COLS as usize]; Board_::ROWS as usize],
+    grid: [Option<Block>; (Board_::COLS * Board_::ROWS) as usize],
     next_moves: Vec<Vec<FlatMove>>,
 }
 
