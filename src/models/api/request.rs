@@ -8,6 +8,26 @@ pub struct BoardParams {
 }
 
 #[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum NewBoard {
+    Empty,
+    Random,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct ChangeState {
+    pub new_state: BoardState,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum AlterBoard {
+    ChangeState(ChangeState),
+    Reset,
+    UndoMove,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct BlockParams {
     pub board_id: i32,
     pub block_idx: usize,
@@ -36,17 +56,4 @@ pub struct MoveBlock {
 pub enum AlterBlock {
     ChangeBlock(ChangeBlock),
     MoveBlock(MoveBlock),
-}
-
-#[derive(Debug, Deserialize)]
-pub struct ChangeState {
-    pub new_state: BoardState,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum AlterBoard {
-    ChangeState(ChangeState),
-    Reset,
-    UndoMove,
 }
