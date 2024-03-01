@@ -1,3 +1,8 @@
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+    Json,
+};
 use serde::Serialize;
 
 use crate::models::game::{
@@ -29,6 +34,12 @@ impl Board {
     }
 }
 
+impl IntoResponse for Board {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
+}
+
 #[derive(Debug, Serialize)]
 pub struct Solved {
     moves: Vec<FlatBoardMove>,
@@ -45,4 +56,10 @@ impl Solved {
 pub enum Solve {
     Solved(Solved),
     UnableToSolve,
+}
+
+impl IntoResponse for Solve {
+    fn into_response(self) -> Response {
+        (StatusCode::OK, Json(self)).into_response()
+    }
 }
