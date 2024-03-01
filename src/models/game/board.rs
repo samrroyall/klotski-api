@@ -44,20 +44,23 @@ impl Default for Board {
 impl Board {
     pub const ROWS: u8 = 5;
     pub const COLS: u8 = 4;
-    pub const NUM_EMPTY_CELLS: u8 = 2;
+    pub const MIN_EMPTY_CELLS: u8 = 2;
 
     const WINNING_BLOCK: Block = Block::TwoByTwo;
     const WINNING_ROW: u8 = 3;
     const WINNING_COL: u8 = 1;
 
+    fn num_cells_free(&self) -> usize {
+        self.grid.iter().filter(|cell| cell.is_none()).count() - usize::from(Self::MIN_EMPTY_CELLS)
+    }
+
     fn is_ready_to_solve(&self) -> bool {
-        self.blocks
+        1 == self
+            .blocks
             .iter()
             .filter(|positioned_block| positioned_block.block == Self::WINNING_BLOCK)
             .count()
-            == 1
-            && self.grid.iter().filter(|cell| cell.is_none()).count()
-                == usize::from(Self::NUM_EMPTY_CELLS)
+            && 0 == self.num_cells_free()
     }
 
     fn update_grid_range(&mut self, range: &[(u8, u8)], value: Option<Block>) {
@@ -110,7 +113,7 @@ impl Board {
 
         let mut block = block.clone();
 
-        for depth in 0..Self::NUM_EMPTY_CELLS {
+        for depth in 0..Self::MIN_EMPTY_CELLS {
             for i in 0..moves.len() {
                 for step in &moves[i] {
                     block.do_step(step).unwrap();
@@ -222,18 +225,22 @@ impl Board {
         })
     }
 
-    pub fn add_block(&mut self, block: PositionedBlock) -> Result<(), BoardError> {
+    pub fn add_block(&mut self, positioned_block: PositionedBlock) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(&State::Building)?;
         }
 
-        if !self.is_range_empty(&block.range) {
+        if !self.is_range_empty(&positioned_block.range) {
             return Err(BoardError::BlockPlacementInvalid);
         }
 
-        self.update_grid_range(&block.range, Some(block.block));
+        if self.num_cells_free() < usize::from(positioned_block.block.size()) {
+            return Err(BoardError::BlockPlacementInvalid);
+        }
 
-        self.blocks.push(block);
+        self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
+
+        self.blocks.push(positioned_block);
 
         let _is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
 
@@ -253,6 +260,13 @@ impl Board {
 
         if positioned_block.block == new_block {
             return Ok(());
+        }
+
+        let old_size = positioned_block.block.size();
+        let new_size = new_block.size();
+
+        if new_size > old_size && self.num_cells_free() < usize::from(new_size - old_size) {
+            return Err(BoardError::BlockPlacementInvalid);
         }
 
         let new_positioned_block = PositionedBlock::new(
@@ -847,6 +861,34 @@ mod tests {
     }
 
     #[test]
+    fn add_block_not_enough_cells_free() {
+        let mut board = Board::default();
+
+        let blocks = [
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
+        ];
+
+        let last_block = PositionedBlock::new(Block::OneByTwo, 4, 0).unwrap();
+
+        for block in blocks.into_iter() {
+            assert!(board.add_block(block).is_ok());
+        }
+
+        assert_eq!(
+            board.add_block(last_block),
+            Err(BoardError::BlockPlacementInvalid)
+        );
+    }
+
+    #[test]
     fn remove_block() {
         let mut board = Board::default();
 
@@ -895,6 +937,34 @@ mod tests {
             ]
         );
         assert!(board.change_block(1, Block::OneByOne).is_err());
+    }
+
+    #[test]
+    fn change_block_not_enough_cells_free() {
+        let mut board = Board::default();
+
+        let blocks = [
+            PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
+            PositionedBlock::new(Block::TwoByTwo, 0, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 0, 3).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 0).unwrap(),
+            PositionedBlock::new(Block::OneByTwo, 2, 1).unwrap(),
+            PositionedBlock::new(Block::TwoByOne, 2, 3).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 1).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 3, 2).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 0).unwrap(),
+            PositionedBlock::new(Block::OneByOne, 4, 3).unwrap(),
+        ];
+
+        for block in blocks.iter() {
+            board.update_grid_range(&block.range, Some(block.block));
+            board.blocks.push(block.clone());
+        }
+
+        assert_eq!(
+            board.change_block(8, Block::OneByTwo),
+            Err(BoardError::BlockPlacementInvalid)
+        );
     }
 
     #[test]
