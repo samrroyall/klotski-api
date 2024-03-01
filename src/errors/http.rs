@@ -1,6 +1,9 @@
-use axum::http::StatusCode;
+use axum::{
+    http::StatusCode,
+    response::{IntoResponse, Response},
+};
 
-use std::fmt;
+use std::{error, fmt};
 
 #[derive(Debug)]
 pub enum Error {
@@ -10,7 +13,7 @@ pub enum Error {
     Unhandled(String),
 }
 
-impl std::error::Error for Error {}
+impl error::Error for Error {}
 
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
@@ -23,8 +26,8 @@ impl fmt::Display for Error {
     }
 }
 
-impl axum::response::IntoResponse for Error {
-    fn into_response(self) -> axum::response::Response {
+impl IntoResponse for Error {
+    fn into_response(self) -> Response {
         let status = match self {
             Error::Forbidden(_) => StatusCode::FORBIDDEN,
             Error::NotFound(_) => StatusCode::NOT_FOUND,
