@@ -11,7 +11,7 @@ use super::{
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Building,
@@ -180,12 +180,12 @@ impl Board {
         hasher.finish()
     }
 
-    pub fn change_state(&mut self, new_state: &State) -> Result<(), BoardError> {
-        if &self.state == new_state {
+    pub fn change_state(&mut self, new_state: State) -> Result<(), BoardError> {
+        if self.state == new_state {
             return Ok(());
         }
 
-        match (&self.state, new_state) {
+        match (self.state, new_state) {
             (State::Building, State::ReadyToSolve) => {
                 if !self.is_ready_to_solve() {
                     return Err(BoardError::BoardStateInvalid);
@@ -212,7 +212,7 @@ impl Board {
             }
         }
 
-        self.state = new_state.clone();
+        self.state = new_state;
 
         Ok(())
     }
@@ -227,7 +227,7 @@ impl Board {
 
     pub fn add_block(&mut self, positioned_block: PositionedBlock) -> Result<(), BoardError> {
         if self.state != State::Building {
-            self.change_state(&State::Building)?;
+            self.change_state(State::Building)?;
         }
 
         if !self.is_range_empty(&positioned_block.range) {
@@ -242,14 +242,14 @@ impl Board {
 
         self.blocks.push(positioned_block);
 
-        let _is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+        let _is_ready_to_solve = self.change_state(State::ReadyToSolve).is_ok();
 
         Ok(())
     }
 
     pub fn change_block(&mut self, block_idx: usize, new_block: Block) -> Result<(), BoardError> {
         if self.state != State::Building {
-            self.change_state(&State::Building)?;
+            self.change_state(State::Building)?;
         }
 
         let positioned_block = self
@@ -291,7 +291,7 @@ impl Board {
 
         self.blocks[block_idx] = new_positioned_block;
 
-        let _is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+        let _is_ready_to_solve = self.change_state(State::ReadyToSolve).is_ok();
 
         Ok(())
     }
@@ -322,7 +322,7 @@ impl Board {
 
         self.blocks.swap_remove(block_idx);
 
-        let _is_not_ready_to_solve = self.change_state(&State::Building).is_ok();
+        let _is_not_ready_to_solve = self.change_state(State::Building).is_ok();
 
         Ok(())
     }
@@ -343,7 +343,7 @@ impl Board {
             &FlatMove::new(row_diff, col_diff).unwrap(),
         ));
 
-        let _is_solved = self.change_state(&State::Solved).is_ok();
+        let _is_solved = self.change_state(State::Solved).is_ok();
     }
 
     pub fn move_block(
@@ -353,7 +353,7 @@ impl Board {
         col_diff: i8,
     ) -> Result<(), BoardError> {
         if self.state != State::Solving {
-            self.change_state(&State::Solving)?;
+            self.change_state(State::Solving)?;
         }
 
         let next_moves = self.get_next_moves();
@@ -391,7 +391,7 @@ impl Board {
             &FlatMove::new(row_diff, col_diff).unwrap(),
         ));
 
-        let _is_solved = self.change_state(&State::Solved).is_ok();
+        let _is_solved = self.change_state(State::Solved).is_ok();
 
         Ok(())
     }
@@ -411,7 +411,7 @@ impl Board {
 
         self.blocks[opposite_move.block_idx] = block;
 
-        let _is_not_solved = self.change_state(&State::Solving).is_ok();
+        let _is_not_solved = self.change_state(State::Solving).is_ok();
     }
 
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
@@ -446,7 +446,7 @@ impl Board {
 
         self.blocks[opposite_move.block_idx] = block;
 
-        let _is_not_solved = self.change_state(&State::Solving).is_ok();
+        let _is_not_solved = self.change_state(State::Solving).is_ok();
 
         Ok(())
     }
@@ -456,7 +456,7 @@ impl Board {
             self.undo_move()?;
         }
 
-        let _board_is_ready_to_solve = self.change_state(&State::ReadyToSolve).is_ok();
+        let _board_is_ready_to_solve = self.change_state(State::ReadyToSolve).is_ok();
 
         Ok(())
     }
@@ -696,7 +696,7 @@ mod tests {
 
         assert_eq!(board.state, State::ReadyToSolve);
 
-        assert!(board.change_state(&State::Solving).is_ok());
+        assert!(board.change_state(State::Solving).is_ok());
 
         let next_moves = board.get_next_moves();
 
@@ -745,8 +745,8 @@ mod tests {
     fn change_state() {
         let mut board = Board::default();
 
-        assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::Solving).is_err());
+        assert!(board.change_state(State::Building).is_ok());
+        assert!(board.change_state(State::Solving).is_err());
 
         let blocks = [
             PositionedBlock::new(Block::TwoByOne, 0, 0).unwrap(),
@@ -765,18 +765,18 @@ mod tests {
             board.blocks.push(block.clone());
         }
 
-        assert!(board.change_state(&State::Solving).is_err());
-        assert!(board.change_state(&State::ReadyToSolve).is_ok());
-        assert!(board.change_state(&State::Building).is_ok());
-        assert!(board.change_state(&State::Solving).is_err());
-        assert!(board.change_state(&State::ReadyToSolve).is_ok());
-        assert!(board.change_state(&State::Solving).is_ok());
+        assert!(board.change_state(State::Solving).is_err());
+        assert!(board.change_state(State::ReadyToSolve).is_ok());
+        assert!(board.change_state(State::Building).is_ok());
+        assert!(board.change_state(State::Solving).is_err());
+        assert!(board.change_state(State::ReadyToSolve).is_ok());
+        assert!(board.change_state(State::Solving).is_ok());
 
         let move_ = FlatBoardMove::new(0, &FlatMove::new(1, 0).unwrap());
         board.moves.push(move_);
 
-        assert!(board.change_state(&State::ReadyToSolve).is_err());
-        assert!(board.change_state(&State::Building).is_err());
+        assert!(board.change_state(State::ReadyToSolve).is_err());
+        assert!(board.change_state(State::Building).is_err());
     }
 
     #[test]

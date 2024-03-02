@@ -85,8 +85,8 @@ pub fn solve(board: &Board) -> Result<Option<Vec<FlatBoardMove>>, BoardError> {
     let mut start_board = board.clone();
     start_board.moves.clear();
 
-    start_board.change_state(&BoardState::Solving)?;
-    let _board_is_already_solved = start_board.change_state(&BoardState::Solved).is_ok();
+    start_board.change_state(BoardState::Solving)?;
+    let _board_is_already_solved = start_board.change_state(BoardState::Solved).is_ok();
 
     Ok(parallel_bfs(start_board).map(|solved_board| solved_board.moves))
 }

@@ -2,6 +2,7 @@ use rand::{
     distributions::uniform::SampleUniform, rngs::ThreadRng, seq::SliceRandom, thread_rng, Rng,
 };
 
+use crate::errors::board::Error as BoardError;
 use crate::models::game::{
     blocks::{Block, Positioned as PositionedBlock},
     board::{Board, State as BoardState},
@@ -69,25 +70,25 @@ fn add_two_by_two_block(board: &mut Board, rng: &mut ThreadRng) {
     board.add_block(two_by_two_block).unwrap();
 }
 
-pub fn randomize(board: &mut Board) {
+pub fn randomize(board: &mut Board) -> Result<(), BoardError> {
     let mut rng = thread_rng();
 
     add_two_by_two_block(board, &mut rng);
     add_remaining_blocks(board, &mut rng);
 
-    let _board_is_ready_to_solve = board.change_state(&BoardState::ReadyToSolve).is_ok();
+    board.change_state(BoardState::ReadyToSolve)?;
+
+    Ok(())
 }
 
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::models::game::board::{Board, State as BoardState};
+    use crate::models::game::board::Board;
 
     #[test]
     fn randomize_() {
         let mut board = Board::default();
-        randomize(&mut board);
-
-        assert_eq!(board.state, BoardState::ReadyToSolve);
+        assert!(randomize(&mut board).is_ok());
     }
 }
