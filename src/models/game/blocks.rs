@@ -26,6 +26,10 @@ impl Block {
             Self::OneByTwo | Self::TwoByTwo => 2,
         }
     }
+
+    pub fn size(self) -> u8 {
+        self.rows() * self.cols()
+    }
 }
 
 #[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
