@@ -1,6 +1,6 @@
 use diesel::prelude::*;
 
-use crate::models::game::board::Board;
+use crate::models::game::{board::Board, moves::FlatBoardMove};
 
 #[derive(Debug, Insertable, AsChangeset)]
 #[diesel(table_name = super::schema::boards)]
@@ -41,5 +41,36 @@ impl SelectableBoard {
             serde_json::from_str(self.grid.as_str()).unwrap(),
             serde_json::from_str(self.moves.as_str()).unwrap(),
         )
+    }
+}
+
+#[derive(Debug, Insertable)]
+#[diesel(table_name = super::schema::solutions)]
+pub struct InsertableSolution {
+    pub hash: i64,
+    pub moves: Option<String>,
+}
+
+impl InsertableSolution {
+    pub fn from(hash: u64, moves: Option<Vec<FlatBoardMove>>) -> Self {
+        Self {
+            hash: hash as i64,
+            moves: moves.map(|moves| serde_json::to_string(&moves).unwrap()),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Selectable, Queryable)]
+#[diesel(table_name = super::schema::solutions)]
+pub struct SelectableSolution {
+    pub id: i32,
+    pub hash: i64,
+    pub moves: Option<String>,
+}
+
+impl SelectableSolution {
+    pub fn get_moves(self) -> Option<Vec<FlatBoardMove>> {
+        self.moves
+            .map(|moves| serde_json::from_str(moves.as_str()).unwrap())
     }
 }

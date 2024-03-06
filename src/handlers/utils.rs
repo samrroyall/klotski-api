@@ -1,6 +1,6 @@
 use crate::{
     errors::{board::Error as BoardError, http::Error as HttpError},
-    repositories::board_states::Error as BoardStateRepositoryError,
+    repositories::boards::Error as BoardStateRepositoryError,
 };
 
 pub fn handle_json_rejection() -> HttpError {
