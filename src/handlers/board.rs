@@ -11,12 +11,13 @@ use super::utils::{
 };
 use crate::models::{
     api::{request, response},
-    game::{blocks::Positioned as PositionedBlock, board::Board},
+    game::{blocks::Positioned as PositionedBlock, board::Board, moves::FlatBoardMove},
 };
-use crate::repositories::board_states::{
+use crate::repositories::boards::{
     create as create_board_state, delete as delete_board_state, get as get_board_state,
     update as update_board_state,
 };
+use crate::repositories::solutions::{create as create_solution, get as get_solution};
 use crate::services::{db::Pool as DbPool, solver};
 use crate::{
     errors::{board::Error as BoardError, http::Error as HttpError},
@@ -102,7 +103,15 @@ fn solve_inner(
     let board =
         get_board_state(params.board_id, &pool).map_err(handle_board_state_repository_error)?;
 
-    let maybe_moves = solver::solve(&board).map_err(handle_board_error)?;
+    let maybe_moves: Option<Vec<FlatBoardMove>>;
+
+    if let Ok(cached_solution) = get_solution(board.hash(), &pool) {
+        maybe_moves = cached_solution;
+    } else {
+        maybe_moves = solver::solve(&board).map_err(handle_board_error)?;
+
+        let _solution_cached = create_solution(board.hash(), maybe_moves.clone(), &pool).is_ok();
+    }
 
     match maybe_moves {
         Some(moves) => Ok(response::Solve::Solved(response::Solved::new(moves))),

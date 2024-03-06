@@ -309,7 +309,7 @@ impl Board {
 
     pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
         if self.state != State::Building {
-            return Err(BoardError::BoardStateInvalid);
+            self.change_state(State::Building)?;
         }
 
         let positioned_block = self
