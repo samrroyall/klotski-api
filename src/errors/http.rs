@@ -2,8 +2,10 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-
 use std::{error, fmt};
+
+use crate::errors::{board::Error as BoardError, handler::Error as HandlerError};
+use crate::repositories::boards::Error as BoardsRepositoryError;
 
 #[derive(Debug)]
 pub enum Error {
@@ -22,6 +24,39 @@ impl fmt::Display for Error {
             Error::NotFound(ref msg) => write!(f, "Not found: {msg}"),
             Error::BadRequest(ref msg) => write!(f, "Invalid input: {msg}"),
             Error::Unhandled(ref msg) => write!(f, "Internal server error: {msg}"),
+        }
+    }
+}
+
+impl From<BoardError> for Error {
+    fn from(err: BoardError) -> Self {
+        match err {
+            BoardError::BlockIndexOutOfBounds
+            | BoardError::BlockInvalid
+            | BoardError::BlockPlacementInvalid => Error::BadRequest(err.to_string()),
+            BoardError::BoardStateInvalid | BoardError::NoMovesToUndo => {
+                Error::Forbidden(err.to_string())
+            }
+            BoardError::BoardNotFound => Error::NotFound(err.to_string()),
+        }
+    }
+}
+
+impl From<BoardsRepositoryError> for Error {
+    fn from(err: BoardsRepositoryError) -> Self {
+        match err {
+            BoardsRepositoryError::BoardError(err) => Error::from(err),
+            BoardsRepositoryError::DieselError(err) => Error::Unhandled(err.to_string()),
+        }
+    }
+}
+
+impl From<HandlerError> for Error {
+    fn from(err: HandlerError) -> Self {
+        match err {
+            HandlerError::InvalidBody | HandlerError::InvalidPath => {
+                Error::BadRequest(err.to_string())
+            }
         }
     }
 }

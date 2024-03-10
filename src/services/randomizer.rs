@@ -36,7 +36,12 @@ fn get_random_free_cell(free_cells: &Vec<u8>, rng: &mut ThreadRng) -> Option<Pos
 }
 
 fn add_remaining_blocks(board: &mut Board, rng: &mut ThreadRng) {
-    let mut blocks = [Block::OneByOne, Block::OneByTwo, Block::TwoByOne];
+    let mut blocks = [
+        Block::OneByOne,
+        Block::OneByOne,
+        Block::OneByTwo,
+        Block::TwoByOne,
+    ];
 
     let mut free_cells = get_cells_free(board);
 

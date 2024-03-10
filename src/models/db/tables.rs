@@ -51,6 +51,7 @@ pub struct InsertableSolution {
     pub moves: Option<String>,
 }
 
+#[allow(clippy::cast_possible_wrap)]
 impl InsertableSolution {
     pub fn from(hash: u64, moves: Option<Vec<FlatBoardMove>>) -> Self {
         Self {
