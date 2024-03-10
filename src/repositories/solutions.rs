@@ -24,6 +24,7 @@ pub fn create(
     Ok(())
 }
 
+#[allow(clippy::cast_possible_wrap)]
 pub fn get(search_hash: u64, pool: &DbPool) -> Result<Option<Vec<FlatBoardMove>>, Error> {
     let mut conn = pool.get().unwrap();
 
