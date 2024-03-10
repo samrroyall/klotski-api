@@ -28,24 +28,6 @@ where
     Ok(response::Board::new(board).into_response())
 }
 
-fn random(pool: &DbPool) -> Result<Response, HttpError> {
-    let board = create_board_state(pool)?;
-
-    let response = update(
-        board.id,
-        |board: &mut Board| randomizer::randomize(board),
-        pool,
-    );
-
-    match solver::solve(&board) {
-        Ok(None) | Err(_) => {
-            delete_board_state(board.id, pool)?;
-            random(pool)
-        }
-        Ok(_) => response,
-    }
-}
-
 #[debug_handler]
 pub async fn new(
     Extension(pool): Extension<DbPool>,
@@ -53,12 +35,15 @@ pub async fn new(
 ) -> Result<Response, HttpError> {
     let body = json_extraction.ok_or(HandlerError::InvalidBody)?.0;
 
+    let board = create_board_state(&pool)?;
+
     match body {
-        request::NewBoard::Empty => {
-            let board = create_board_state(&pool)?;
-            Ok(response::Board::new(board).into_response())
-        }
-        request::NewBoard::Random => random(&pool),
+        request::NewBoard::Empty => Ok(response::Board::new(board).into_response()),
+        request::NewBoard::Random => update(
+            board.id,
+            |board: &mut Board| randomizer::randomize(board),
+            &pool,
+        ),
     }
 }
 
