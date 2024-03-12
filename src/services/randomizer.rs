@@ -39,8 +39,10 @@ fn add_remaining_blocks(board: &mut Board, rng: &mut ThreadRng) {
     let mut blocks = [
         Block::OneByOne,
         Block::OneByOne,
-        Block::OneByTwo,
+        Block::OneByOne,
         Block::TwoByOne,
+        Block::TwoByOne,
+        Block::OneByTwo,
     ];
 
     let mut free_cells = get_cells_free(board);
@@ -49,7 +51,15 @@ fn add_remaining_blocks(board: &mut Board, rng: &mut ThreadRng) {
         if let Some(position) = get_random_free_cell(&free_cells, rng) {
             blocks.shuffle(rng);
 
+            let mut seen = vec![];
+
             for block in &blocks {
+                if seen.contains(&block) {
+                    continue;
+                }
+
+                seen.push(block);
+
                 if let Some(positioned_block) =
                     PositionedBlock::new(*block, position.row, position.col)
                 {
