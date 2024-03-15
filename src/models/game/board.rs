@@ -466,6 +466,10 @@ impl Board {
     }
 
     pub fn reset(&mut self) -> Result<(), BoardError> {
+        if ![State::Solving, State::Solved].contains(&self.state) {
+            return Err(BoardError::BoardStateInvalid);
+        }
+
         while !self.moves.is_empty() {
             self.undo_move()?;
         }
@@ -1349,6 +1353,9 @@ mod tests {
         let block = PositionedBlock::new(Block::OneByOne, 2, 0).unwrap();
         board.update_grid_range(&block.range, Some(block.block));
         board.blocks.push(block);
+
+        assert!(board.reset().is_err());
+
         board.state = State::Solving;
         board.moves = vec![
             FlatBoardMove::new(0, &FlatMove::new(0, 1).unwrap()),
