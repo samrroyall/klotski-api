@@ -1,11 +1,12 @@
 #![warn(clippy::pedantic)]
 
 use axum::{
-    http::{header, HeaderValue, Method},
+    http::Method,
     routing::{delete, post, put},
     Extension, Router,
 };
-use tower_http::cors::CorsLayer;
+use tower_http::cors::{Any, CorsLayer};
+use tracing_subscriber::{layer::SubscriberExt, Registry};
 
 mod errors;
 mod handlers;
@@ -17,13 +18,36 @@ use crate::handlers::board as board_handlers;
 
 #[tokio::main]
 async fn main() {
+    dotenvy::dotenv().ok();
+
+    let environment = dotenvy::var("ENVIRONMENT").expect("ENVIRONMENT is not set");
+    let log_level = dotenvy::var("LOG_LEVEL").expect("LOG_LEVEL is not set");
+    let dsn = dotenvy::var("SENTRY_DSN").expect("SENTRY_DSN is not set");
+    let bind_url = dotenvy::var("BIND_URL").expect("BIND_URL is not set");
+    let bind_port = dotenvy::var("BIND_PORT").expect("BIND_PORT is not set");
+
+    let _sentry_guard = sentry::init((
+        dsn,
+        sentry::ClientOptions {
+            environment: Some(environment.into()),
+            release: sentry::release_name!(),
+            ..Default::default()
+        },
+    ));
+
+    let subscriber = Registry::default()
+        .with(tracing_subscriber::EnvFilter::new(log_level))
+        .with(tracing_subscriber::fmt::layer())
+        .with(sentry_tracing::layer());
+
+    tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
+
     let db_pool = services::db::get_db_pool();
 
     let cors = CorsLayer::new()
         .allow_methods([Method::DELETE, Method::POST, Method::PUT])
-        .allow_headers([header::CONTENT_TYPE])
-        .allow_origin("http://localhost:3000".parse::<HeaderValue>().unwrap())
-        .allow_credentials(false);
+        .allow_headers(Any)
+        .allow_origin(Any);
 
     let board_routes = Router::new()
         .route("/", post(board_handlers::new))
@@ -42,15 +66,12 @@ async fn main() {
 
     let api_routes = Router::new().nest("/board", board_routes);
 
+    tracing::debug!("Listening on {bind_url}:{bind_port}");
+
     let app = Router::new()
         .nest("/api", api_routes)
         .layer(Extension(db_pool))
         .layer(cors);
-
-    dotenvy::dotenv().ok();
-
-    let bind_url = dotenvy::var("BIND_URL").expect("BIND_URL is not set");
-    let bind_port = dotenvy::var("BIND_PORT").expect("BIND_PORT is not set");
 
     let listener = tokio::net::TcpListener::bind(format!("{bind_url}:{bind_port}"))
         .await

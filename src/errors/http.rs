@@ -45,8 +45,14 @@ impl From<BoardError> for Error {
 impl From<BoardsRepositoryError> for Error {
     fn from(err: BoardsRepositoryError) -> Self {
         match err {
-            BoardsRepositoryError::BoardError(err) => Error::from(err),
-            BoardsRepositoryError::DieselError(err) => Error::Unhandled(err.to_string()),
+            BoardsRepositoryError::BoardError(err) => {
+                tracing::error!("BoardError: {}", err);
+                Error::from(err)
+            }
+            BoardsRepositoryError::DieselError(err) => {
+                tracing::error!("DieselError: {}", err);
+                Error::Unhandled(err.to_string())
+            }
         }
     }
 }
@@ -55,6 +61,7 @@ impl From<HandlerError> for Error {
     fn from(err: HandlerError) -> Self {
         match err {
             HandlerError::InvalidBody | HandlerError::InvalidPath => {
+                tracing::error!("HandlerError: {}", err);
                 Error::BadRequest(err.to_string())
             }
         }
