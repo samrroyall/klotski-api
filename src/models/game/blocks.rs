@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use serde::{Deserialize, Serialize};
 
 use super::{moves::Step, utils::Position};
@@ -38,6 +40,12 @@ pub struct Positioned {
     pub min_position: Position,
     pub max_position: Position,
     pub range: Vec<(u8, u8)>,
+}
+
+impl Display for Positioned {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "Block({:?}@{})", self.block, self.min_position)
+    }
 }
 
 impl Positioned {

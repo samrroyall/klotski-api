@@ -1,3 +1,5 @@
+use std::fmt::{self, Display, Formatter};
+
 use serde::{Deserialize, Serialize};
 
 use super::board::Board;
@@ -7,6 +9,12 @@ use crate::errors::board::Error as BoardError;
 pub struct Position {
     pub row: u8,
     pub col: u8,
+}
+
+impl Display for Position {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        write!(f, "({},{})", self.row, self.col)
+    }
 }
 
 impl Position {
