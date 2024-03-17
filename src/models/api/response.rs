@@ -54,12 +54,12 @@ impl Solved {
 
 #[derive(Debug, Serialize, ToResponse, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum Solve {
+pub enum Solution {
     Solved(Solved),
     UnableToSolve,
 }
 
-impl IntoResponse for Solve {
+impl IntoResponse for Solution {
     fn into_response(self) -> Response {
         (StatusCode::OK, Json(self)).into_response()
     }

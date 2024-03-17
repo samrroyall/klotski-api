@@ -4,7 +4,7 @@ use crate::handlers::board as board_handlers;
 use crate::models::api::request::{
     AddBlock, AlterBlock, AlterBoard, ChangeBlock, ChangeState, MoveBlock, NewBoard,
 };
-use crate::models::api::response::{Board, Solve, Solved};
+use crate::models::api::response::{Board, Solution, Solved};
 use crate::models::game::blocks::{Block, Positioned};
 use crate::models::game::board::State;
 use crate::models::game::moves::{FlatBoardMove, FlatMove};
@@ -36,7 +36,7 @@ use crate::models::game::utils::Position;
         NewBoard,
         Positioned,
         Position,
-        Solve,
+        Solution,
         Solved,
         State
     ),)

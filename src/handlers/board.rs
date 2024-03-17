@@ -182,11 +182,11 @@ pub async fn solve(
             board
         );
 
-        response::Solve::Solved(response::Solved::new(moves))
+        response::Solution::Solved(response::Solved::new(moves))
     } else {
         tracing::info!("There is no valid solution for board {}", board);
 
-        response::Solve::UnableToSolve
+        response::Solution::UnableToSolve
     };
 
     Ok(result.into_response())
