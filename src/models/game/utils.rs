@@ -1,11 +1,12 @@
 use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::board::Board;
 use crate::errors::board::Error as BoardError;
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Position {
     pub row: u8,
     pub col: u8,

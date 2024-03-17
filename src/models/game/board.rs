@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{
     blocks::{Block, Positioned as PositionedBlock},
@@ -12,7 +13,8 @@ use super::{
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[schema(as = BoardState)]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Building,

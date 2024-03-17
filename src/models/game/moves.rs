@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::board::Board;
 
@@ -45,7 +46,7 @@ pub struct Move {
     pub steps: Vec<Step>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct FlatMove {
     pub row_diff: i8,
     pub col_diff: i8,
@@ -70,7 +71,7 @@ impl FlatMove {
     }
 }
 
-#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 pub struct FlatBoardMove {
     pub block_idx: usize,
     pub row_diff: i8,

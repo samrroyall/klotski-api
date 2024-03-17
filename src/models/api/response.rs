@@ -4,6 +4,7 @@ use axum::{
     Json,
 };
 use serde::Serialize;
+use utoipa::{ToResponse, ToSchema};
 
 use crate::models::game::{
     blocks::{Block, Positioned as PositionedBlock},
@@ -11,7 +12,7 @@ use crate::models::game::{
     moves::{FlatBoardMove, FlatMove},
 };
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToResponse, ToSchema)]
 pub struct Board {
     id: i32,
     state: BoardState,
@@ -40,7 +41,7 @@ impl IntoResponse for Board {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToResponse, ToSchema)]
 pub struct Solved {
     moves: Vec<FlatBoardMove>,
 }
@@ -51,7 +52,7 @@ impl Solved {
     }
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, ToResponse, ToSchema)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Solve {
     Solved(Solved),

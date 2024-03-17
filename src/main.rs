@@ -7,7 +7,10 @@ use axum::{
 };
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
+use utoipa::OpenApi;
+use utoipa_swagger_ui::SwaggerUi;
 
+mod docs;
 mod errors;
 mod handlers;
 mod models;
@@ -66,16 +69,19 @@ async fn main() {
 
     let api_routes = Router::new().nest("/board", board_routes);
 
-    tracing::debug!("Listening on {bind_url}:{bind_port}");
-
     let app = Router::new()
         .nest("/api", api_routes)
         .layer(Extension(db_pool))
-        .layer(cors);
+        .layer(cors)
+        .merge(
+            SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", docs::ApiDoc::openapi()),
+        );
 
     let listener = tokio::net::TcpListener::bind(format!("{bind_url}:{bind_port}"))
         .await
         .unwrap();
+
+    tracing::debug!("Listening on {bind_url}:{bind_port}");
 
     axum::serve(listener, app).await.unwrap();
 }

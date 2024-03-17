@@ -30,6 +30,20 @@ where
     Ok(response::Board::new(board).into_response())
 }
 
+#[utoipa::path(
+    post,
+    tag = "Board Operations",
+    operation_id = "create_board",
+    path = "/board",
+    request_body(content = NewBoard),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn new(
     Extension(pool): Extension<DbPool>,
@@ -59,6 +73,21 @@ pub async fn new(
     }
 }
 
+#[utoipa::path(
+    put,
+    tag = "Board Operations",
+    operation_id = "alter_board",
+    path = "/board/{board_id}",
+    params(request::BoardParams),
+    request_body(content = AlterBoard),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn alter(
     Extension(pool): Extension<DbPool>,
@@ -105,6 +134,20 @@ pub async fn alter(
     Ok(result)
 }
 
+#[utoipa::path(
+    post,
+    tag = "Board Operations",
+    operation_id = "solve_board",
+    path = "/board/{board_id}/solve",
+    params(request::BoardParams),
+    responses(
+        (status = OK, description = "Success", body = Solve),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn solve(
     Extension(pool): Extension<DbPool>,
@@ -149,6 +192,19 @@ pub async fn solve(
     Ok(result.into_response())
 }
 
+#[utoipa::path(
+    delete,
+    tag = "Board Operations",
+    operation_id = "delete_board",
+    path = "/board/{board_id}",
+    params(request::BoardParams),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn delete(
     Extension(pool): Extension<DbPool>,
@@ -165,6 +221,21 @@ pub async fn delete(
     Ok(().into_response())
 }
 
+#[utoipa::path(
+    post,
+    tag = "Block Operations",
+    operation_id = "add_block",
+    path = "/board/{board_id}/block",
+    params(request::BoardParams),
+    request_body(content = AddBlock),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn add_block(
     Extension(pool): Extension<DbPool>,
@@ -198,6 +269,21 @@ pub async fn add_block(
     Ok(result)
 }
 
+#[utoipa::path(
+    put,
+    tag = "Block Operations",
+    operation_id = "alter_block",
+    path = "/board/{board_id}/block/{block_idx}",
+    params(request::BlockParams),
+    request_body(content = AlterBlock),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn alter_block(
     Extension(pool): Extension<DbPool>,
@@ -251,6 +337,20 @@ pub async fn alter_block(
     Ok(result)
 }
 
+#[utoipa::path(
+    delete,
+    tag = "Block Operations",
+    operation_id = "remove_block",
+    path = "/board/{board_id}/block/{block_idx}",
+    params(request::BlockParams),
+    responses(
+        (status = OK, description = "Success", body = Board),
+        (status = BAD_REQUEST, description = "Invalid parameters"),
+        (status = FORBIDDEN, description = "Action not allowed"),
+        (status = NOT_FOUND, description = "Board not found"),
+        (status = INTERNAL_SERVER_ERROR, description = "Unhandled exception"),
+    ),
+)]
 #[debug_handler]
 pub async fn remove_block(
     Extension(pool): Extension<DbPool>,
