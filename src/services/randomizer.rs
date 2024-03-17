@@ -85,6 +85,11 @@ fn add_two_by_two_block(board: &mut Board, rng: &mut ThreadRng) {
     board.add_block(two_by_two_block).unwrap();
 }
 
+// Randomly add block to the board in the building state. Add 2x2 block to a
+// random valid position in the first three rows. Then add  remaining blocks at
+// random until the board has no remaining empty cells. Remaining block
+// probabilities are: 1/2 for 1x1 block, 1/3 for 2x1 block, and 1/6 1x2 block.
+// This is done to reduce the risk of the board being unsolvable.
 pub fn randomize(board: &mut Board) -> Result<(), BoardError> {
     let mut rng = thread_rng();
 
