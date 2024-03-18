@@ -8,7 +8,7 @@ use axum::{
 use tower_http::cors::{Any, CorsLayer};
 use tracing_subscriber::{layer::SubscriberExt, Registry};
 use utoipa::OpenApi;
-use utoipa_swagger_ui::SwaggerUi;
+use utoipa_rapidoc::RapiDoc;
 
 mod docs;
 mod errors;
@@ -74,7 +74,8 @@ async fn main() {
         .layer(Extension(db_pool))
         .layer(cors)
         .merge(
-            SwaggerUi::new("/swagger-ui").url("/api-docs/openapi.json", docs::ApiDoc::openapi()),
+            RapiDoc::with_openapi("/api-docs/openapi.json", docs::ApiDoc::openapi())
+                .path("/rapidoc"),
         );
 
     let listener = tokio::net::TcpListener::bind(format!("{bind_url}:{bind_port}"))
