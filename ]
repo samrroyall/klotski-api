@@ -93,12 +93,15 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `POST /api/board/`
 - Description: Creates a new empty board and will optionally randomly place blocks. *Note*: Randomly generated board may be unsolvable.
-- Query Params:
+- Params:
+    - Query:
 
-    ```js
-    randomize: boolean // default: false
-    ```
+        ```js
+        randomize: boolean | null // default: false
 
+        ```
+
+- Request Body: None
 - Response Body: The new board
 
     ```js
@@ -141,12 +144,6 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 #### Alter Board 
 - Path: `PUT api/board/:board_id`
 - Description: Modifies the board be either **a)** changing its state, **b)** undoing the last move, or **c)** resetting the board by undoing all moves that have taken place. Note: rules for 
-- Path Params:
-
-    ```js
-    board_id: number
-    ```
-
 - Request Body: The type of board alteration to be performed
 
     ```js
@@ -200,23 +197,14 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `DELETE api/board/:board_id`
 - Description: Deletes the board
-- Path Params:
-
-    ```js
-    board_id: number
-    ```
+- Request Body: None
+- Response Body: None
 
 #### Solve Board
 
 - Path: `POST api/board/:board_id/solve`
 - Description: Solves the board
-- Path Params:
-
-    ```js
-    board_id: number
-    block_idx: number
-    ```
-
+- Request Body: None
 - Response Body: An optimal list of moves required to solve the board if solvable
 
     ```js
@@ -240,13 +228,6 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `POST /api/board/:board_id/block`
 - Description: Adds the block to the board
-- Path Params:
-
-    ```js
-    board_id: number
-    block_idx: number
-    ```
-
 - Request Body: The block and the board position where where it should be placed, as represented by the top-left cell of that position
 
     ```js
@@ -300,13 +281,6 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `PUT /api/board/:board_id/block/:block_idx`
 - Description: Modifies a block by either changing it into a different block variation or moving it the specified amount
-- Path Params:
-
-    ```js
-    board_id: number
-    block_idx: number
-    ```
-
 - Request Body: The type of modification to apply to the block
 
     ```js
@@ -363,13 +337,7 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `DELETE /api/board/:board_id/block/:block_idx`
 - Description: Removes the specified block from the board
-- Path Params:
-
-    ```js
-    board_id: number
-    block_idx: number
-    ```
-
+- Request Body: None
 - Response Body: The updated board
 
     ```js
