@@ -1,11 +1,12 @@
 use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{moves::Step, utils::Position};
 use crate::errors::board::Error as BoardError;
 
-#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Copy, Clone, Hash, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum Block {
     OneByOne,
@@ -34,7 +35,8 @@ impl Block {
     }
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Eq, Clone, Serialize, Deserialize, ToSchema)]
+#[schema(as = PositionedBlock)]
 pub struct Positioned {
     pub block: Block,
     pub min_position: Position,

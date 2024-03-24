@@ -60,7 +60,7 @@ impl From<BoardsRepositoryError> for Error {
 impl From<HandlerError> for Error {
     fn from(err: HandlerError) -> Self {
         match err {
-            HandlerError::InvalidBody | HandlerError::InvalidPath => {
+            HandlerError::Body | HandlerError::Path | HandlerError::Query => {
                 tracing::error!("HandlerError: {}", err);
                 Error::BadRequest(err.to_string())
             }

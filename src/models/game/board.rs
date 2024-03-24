@@ -5,6 +5,7 @@ use std::{
 };
 
 use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
 
 use super::{
     blocks::{Block, Positioned as PositionedBlock},
@@ -12,7 +13,8 @@ use super::{
 };
 use crate::{errors::board::Error as BoardError, models::game::utils::Position};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[schema(as = BoardState)]
 #[serde(rename_all = "snake_case")]
 pub enum State {
     Building,
@@ -188,12 +190,14 @@ impl Board {
         }
     }
 
+    // Board hash implemented as a hash of the board's grid property
     pub fn hash(&self) -> u64 {
         let mut hasher = DefaultHasher::new();
         self.grid.hash(&mut hasher);
         hasher.finish()
     }
 
+    // Logic for changing the board's state
     pub fn change_state(&mut self, new_state: State) -> Result<(), BoardError> {
         if self.state == new_state {
             return Ok(());
@@ -231,6 +235,7 @@ impl Board {
         Ok(())
     }
 
+    // Board is solved if a winning block is in the winning position
     pub fn is_solved(&self) -> bool {
         self.blocks.iter().any(|block| {
             block.block == Self::WINNING_BLOCK
@@ -239,6 +244,9 @@ impl Board {
         })
     }
 
+    // Add block to board while in the building state. If the proposed area
+    // is already covered or if there are not enough free cells, the block is
+    // not added and the BlockPlacementInvalid error is returned.
     pub fn add_block(&mut self, positioned_block: PositionedBlock) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(State::Building)?;
@@ -261,6 +269,11 @@ impl Board {
         Ok(())
     }
 
+    // Change the block at the given index to a new block while in the building
+    // state. If the provided block index is out of bounds, the
+    // BlockIndexOutOfBounds error is returned. If there are not enough free
+    // cells, the position is invalid, or the proposed area is already covered,
+    // the BlockPlacementInvalid error is returned.
     pub fn change_block(&mut self, block_idx: usize, new_block: Block) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(State::Building)?;
@@ -310,6 +323,7 @@ impl Board {
         Ok(())
     }
 
+    // List all possible moves for each block in the board's block property
     pub fn get_next_moves(&mut self) -> Vec<Vec<FlatMove>> {
         self.blocks
             .iter()
@@ -321,6 +335,9 @@ impl Board {
             .collect()
     }
 
+    // Remove the block at the given index while in the building state. If the
+    // provided block index is out of bounds, the BlockIndexOutOfBounds error is
+    // returned.
     pub fn remove_block(&mut self, block_idx: usize) -> Result<(), BoardError> {
         if self.state != State::Building {
             self.change_state(State::Building)?;
@@ -341,6 +358,9 @@ impl Board {
         Ok(())
     }
 
+    // Move the block at the given index by the given row and column difference
+    // without any error checking. This method is used by the solver when the
+    // provided move is guaranteed to be valid.
     pub fn move_block_unchecked(&mut self, block_idx: usize, row_diff: i8, col_diff: i8) {
         let mut positioned_block = self.blocks.get(block_idx).cloned().unwrap();
 
@@ -360,6 +380,11 @@ impl Board {
         let _is_solved = self.change_state(State::Solved).is_ok();
     }
 
+    // Move the block at the given index by the given row and column difference
+    // while in the solveing state. If the provided block index is out of
+    // bounds, the BlockIndexOutOfBounds error is returned. If the provided move
+    // is not present in the board's list of next moves for the corresponding
+    // block, the BlockPlacementInvalid error is returned.
     pub fn move_block(
         &mut self,
         block_idx: usize,
@@ -374,7 +399,7 @@ impl Board {
 
         let is_valid_move = next_moves
             .get(block_idx)
-            .unwrap()
+            .ok_or(BoardError::BlockIndexOutOfBounds)?
             .iter()
             .any(|move_| move_.row_diff == row_diff && move_.col_diff == col_diff);
 
@@ -390,11 +415,7 @@ impl Board {
 
         self.update_grid_range(&positioned_block.range, None);
 
-        if positioned_block.move_by(row_diff, col_diff).is_err() {
-            self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
-
-            return Err(BoardError::BlockPlacementInvalid);
-        };
+        positioned_block.move_by(row_diff, col_diff).unwrap();
 
         self.update_grid_range(&positioned_block.range, Some(positioned_block.block));
 
@@ -410,6 +431,8 @@ impl Board {
         Ok(())
     }
 
+    // Undo the board's last move without any error checking. This method is
+    // used by the solver when there is guaranteed to be a move to undo.
     pub fn undo_move_unchecked(&mut self) {
         let opposite_move = self.moves.pop().unwrap().opposite();
 
@@ -428,6 +451,10 @@ impl Board {
         let _is_not_solved = self.change_state(State::Solving).is_ok();
     }
 
+    // Undo the board's last move while in the solving state. If there are no
+    // moves to undo, the NoMovesToUndo error is returned. If the block index
+    // of the last move is out of bounds, the BlockIndexOutOfBounds error is
+    // returned.
     pub fn undo_move(&mut self) -> Result<(), BoardError> {
         if ![State::Solving, State::Solved].contains(&self.state) {
             return Err(BoardError::BoardStateInvalid);
@@ -439,22 +466,13 @@ impl Board {
             .ok_or(BoardError::NoMovesToUndo)?
             .opposite();
 
-        let mut block = self
-            .blocks
-            .get(opposite_move.block_idx)
-            .cloned()
-            .ok_or(BoardError::BlockIndexOutOfBounds)?;
+        let mut block = self.blocks.get(opposite_move.block_idx).cloned().unwrap();
 
         self.update_grid_range(&block.range, None);
 
-        if block
+        block
             .move_by(opposite_move.row_diff, opposite_move.col_diff)
-            .is_err()
-        {
-            self.update_grid_range(&block.range, Some(block.block));
-
-            return Err(BoardError::BlockPlacementInvalid);
-        }
+            .unwrap();
 
         self.update_grid_range(&block.range, Some(block.block));
 
@@ -465,6 +483,8 @@ impl Board {
         Ok(())
     }
 
+    // Undo all board moves while in the solving or solved state. If there are
+    // no moves to undo, the NoMovesToUndo error is returned.
     pub fn reset(&mut self) -> Result<(), BoardError> {
         if ![State::Solving, State::Solved].contains(&self.state) {
             return Err(BoardError::BoardStateInvalid);

@@ -81,6 +81,16 @@ fn parallel_bfs(root: Board) -> Option<Board> {
     None
 }
 
+// Find an optimal solution for the board and return an optional list of moves
+// depending on whether the board is solvable. The solution is found using a
+// parallel breadth-first search algorithm with 4 threads. The root of the
+// breadth-first search is the board passed as an argument. The algorithm
+// generates the children of each board node using the board's get_next_moves
+// method. For each of these moves, the move is applied to the board, the
+// resulting board is cloned and added to the queue if the board has not been
+// seen. The move is then undone. The algorithm continues until the queue is
+// empty. The algorithm returns the moves property of the solved board. The
+// seen has set contains the hashes of each board encountered.
 pub fn solve(board: &Board) -> Result<Option<Vec<FlatBoardMove>>, BoardError> {
     let mut start_board = board.clone();
     start_board.moves.clear();
