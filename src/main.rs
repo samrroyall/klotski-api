@@ -17,8 +17,6 @@ mod models;
 mod repositories;
 mod services;
 
-use crate::handlers::board as board_handlers;
-
 #[tokio::main]
 async fn main() {
     dotenvy::dotenv().ok();
@@ -52,20 +50,17 @@ async fn main() {
         .allow_headers(Any)
         .allow_origin(Any);
 
+    let block_routes = Router::new()
+        .route("/", post(handlers::block::add))
+        .route("/:block_idx", put(handlers::block::alter))
+        .route("/:block_idx", delete(handlers::block::remove));
+
     let board_routes = Router::new()
-        .route("/", post(board_handlers::new))
-        .route("/:board_id", put(board_handlers::alter))
-        .route("/:board_id", delete(board_handlers::delete))
-        .route("/:board_id/block", post(board_handlers::add_block))
-        .route(
-            "/:board_id/block/:block_idx",
-            put(board_handlers::alter_block),
-        )
-        .route(
-            "/:board_id/block/:block_idx",
-            delete(handlers::board::remove_block),
-        )
-        .route("/:board_id/solve", post(board_handlers::solve));
+        .route("/", post(handlers::board::new))
+        .route("/:board_id", put(handlers::board::alter))
+        .route("/:board_id", delete(handlers::board::delete))
+        .route("/:board_id/solve", post(handlers::board::solve))
+        .nest("/:board_id/block", block_routes);
 
     let api_routes = Router::new().nest("/board", board_routes);
 

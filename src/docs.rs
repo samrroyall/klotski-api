@@ -1,6 +1,6 @@
 use utoipa::OpenApi;
 
-use crate::handlers::board as board_handlers;
+use crate::handlers;
 use crate::models::api::request::{
     AddBlock, AlterBlock, AlterBoard, ChangeBlock, ChangeState, MoveBlock, NewBoard,
 };
@@ -14,13 +14,13 @@ use crate::models::game::utils::Position;
 #[openapi(
     info(title = "Klotski API", version = "0.1.0",),
     paths(
-        board_handlers::add_block,
-        board_handlers::alter_block,
-        board_handlers::remove_block,
-        board_handlers::new,
-        board_handlers::alter,
-        board_handlers::delete,
-        board_handlers::solve,
+        handlers::block::add,
+        handlers::block::alter,
+        handlers::block::remove,
+        handlers::board::new,
+        handlers::board::alter,
+        handlers::board::delete,
+        handlers::board::solve,
     ),
     components(schemas(
         AddBlock,
