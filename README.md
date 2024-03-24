@@ -1,10 +1,10 @@
 # klotski-api
 
-This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is build using the Axum framework and uses Diesel to communicate with a Postgres database.
+This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is built using the Axum framework and uses Diesel to communicate with a Postgres database.
 
 ## Project Structure
 
-```bash
+```
 .
 └── src
     ├── docs.rs
@@ -14,6 +14,7 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
     │   ├── http.rs
     │   └── mod.rs
     ├── handlers
+    │   ├── block.rs
     │   ├── board.rs
     │   └── mod.rs
     ├── main.rs
@@ -48,11 +49,12 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - `errors/`
     - `board.rs` - Contains the `Error` structure used for error handling related to board operations
-    - `handler.rs` - Contains the `Error` structure used for error handling related to validtion of request parameters
+    - `handler.rs` - Contains the `Error` structure used for error handling related to validation of request parameters
     - `http.rs` - Contains the `Error` structure related HTTP failure responses along with `From` implementations for the other error structures
 
 - `handlers/` 
-    - `board.rs` - Contains handlers for board and block operations
+    - `block.rs` - Contains handlers for block operations
+    - `board.rs` - Contains handlers for board operations
 
 - `main.rs` - The entry point of the API
 
@@ -62,7 +64,7 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
         - `response.rs` - Contains structures related to response types
     - `db/`
         - `schema.rs` - Contains the Diesel-generated schema for the two database tables
-        - `tables.rs` - Contains structures for the insertable and selectable representations of records for each of the two databse tables
+        - `tables.rs` - Contains structures for the insertable and selectable representations of records for each of the two database tables
     - `game/`
         - `blocks.rs` - Contains the `Block` enumeration and the `Positioned` structure used for block representation
         - `board.rs` - Contains the `Board` and `BoardState` structures as well as logic related to board operations
@@ -93,29 +95,29 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Description: Creates a new empty board and will optionally randomly place blocks. *Note*: Randomly generated board may be unsolvable.
 - Request Body: The type of board to create
 
-    ```json
+    ```js
     {
-        "type": "empty" | "random"
+        type: "empty" | "random"
     }
     ```
 
 - Response Body: The new board
 
-    ```json
+    ```js
     {
-        "id": number,
+        id: number,
         // current state of the board
-        "state": "building" | "ready_to_solve" | "solving" | "solved",
+        state: "building" | "ready_to_solve" | "solving" | "solved",
         // list of placed blocks
-        "blocks": [
+        blocks: [
             {
-                "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+                block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
                 // top-left position of block
-                "min_position": {row: number, col: number},
+                min_position: {row: number, col: number},
                 // bottom-right position of block
-                "max_position": {row: number, col: number},
+                max_position: {row: number, col: number},
                 // list of positions covered by block
-                "range": [
+                range: [
                     {row: number, col: number},
                     ...
                 ]
@@ -123,14 +125,14 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
             ...
         ],
         // Flat list of blocks covering each cell in the 5x4 board
-        "grid": [
+        grid: [
             "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two" | null,
             ...
         ],
         // list of available moves for each placed block
-        "next_moves": [
+        next_moves: [
             [
-                {"row_diff": number, "col_diff": number},
+                {row_diff: number, col_diff: number},
                 ...
             ]
             ...
@@ -143,7 +145,7 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Description: Modifies the board be either **a)** changing its state, **b)** undoing the last move, or **c)** resetting the board by undoing all moves that have taken place. Note: rules for 
 - Request Body: The type of board alteration to be performed
 
-    ```json
+    ```js
     {
         type: "change_state" | "undo_move" | "reset",
         // if type is "change_state" the below must be provided
@@ -153,21 +155,21 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Response Body: The altered board
 
-    ```json
+    ```js
     {
-        "id": number,
+        id: number,
         // current state of the board
-        "state": "building" | "ready_to_solve" | "solving" | "solved",
+        state: "building" | "ready_to_solve" | "solving" | "solved",
         // list of placed blocks
-        "blocks": [
+        blocks: [
             {
-                "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+                block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
                 // top-left position of block
-                "min_position": {row: number, col: number},
+                min_position: {row: number, col: number},
                 // bottom-right position of block
-                "max_position": {row: number, col: number},
+                max_position: {row: number, col: number},
                 // list of positions covered by block
-                "range": [
+                range: [
                     {row: number, col: number},
                     ...
                 ]
@@ -175,14 +177,14 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
             ...
         ],
         // Flat list of blocks covering each cell in the 5x4 board
-        "grid": [
+        grid: [
             "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two" | null,
             ...
         ],
         // list of available moves for each placed block
-        "next_moves": [
+        next_moves: [
             [
-                {"row_diff": number, "col_diff": number},
+                {row_diff: number, col_diff: number},
                 ...
             ]
             ...
@@ -204,15 +206,15 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Request Body: None
 - Response Body: An optimal list of moves required to solve the board if solvable
 
-    ```json
+    ```js
     {
-        "type": "unable_to_solve" | "solved",
+        type: "unable_to_solve" | "solved",
         // If the type is "solved", the below will be provided
-        "moves": [
+        moves: [
             {
-                "block_idx": number,
-                "row_diff": number,
-                "col_diff": number
+                block_idx: number,
+                row_diff: number,
+                col_diff: number
             },
             ...
         ]
@@ -227,31 +229,31 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Description: Adds the block to the board
 - Request Body: The block and the board position where where it should be placed, as represented by the top-left cell of that position
 
-    ```json
+    ```js
     {
-        "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
-        "min_row": number,
-        "min_col": number
+        block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+        min_row: number,
+        min_col: number
     }
     ```
 
 - Response Body: The updated board
 
-    ```json
+    ```js
     {
-        "id": number,
+        id: number,
         // current state of the board
-        "state": "building" | "ready_to_solve" | "solving" | "solved",
+        state: "building" | "ready_to_solve" | "solving" | "solved",
         // list of placed blocks
-        "blocks": [
+        blocks: [
             {
-                "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+                block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
                 // top-left position of block
-                "min_position": {row: number, col: number},
+                min_position: {row: number, col: number},
                 // bottom-right position of block
-                "max_position": {row: number, col: number},
+                max_position: {row: number, col: number},
                 // list of positions covered by block
-                "range": [
+                range: [
                     {row: number, col: number},
                     ...
                 ]
@@ -259,14 +261,14 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
             ...
         ],
         // Flat list of blocks covering each cell in the 5x4 board
-        "grid": [
+        grid: [
             "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two" | null,
             ...
         ],
         // list of available moves for each placed block
-        "next_moves": [
+        next_moves: [
             [
-                {"row_diff": number, "col_diff": number},
+                {row_diff: number, col_diff: number},
                 ...
             ]
             ...
@@ -280,49 +282,49 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Description: Modifies a block by either changing it into a different block variation or moving it the specified amount
 - Request Body: The type of modification to apply to the block
 
-    ```json
+    ```js
     {
-        "type": "change_block" | "move_block",
+        type: "change_block" | "move_block",
         // if the type is "change_block", the below must be specified
-        "new_block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+        new_block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
         // if the type is "move_block", the below must be specified
-        "row_diff": number,
-        "col_diff": number
+        row_diff: number,
+        col_diff: number
     }    
     ```
 
 - Response Body: The updated board
 
-    ```json
+    ```js
     {
-        "id": number,
+        id: number,
         // current state of the board
-        "state": "building" | "ready_to_solve" | "solving" | "solved",
+        state: "building" | "ready_to_solve" | "solving" | "solved",
         // list of placed blocks
-        "blocks": [
+        blocks: [
             {
-                "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+                block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
                 // top-left position of block
-                "min_position": {row: number, col: number},
+                min_position: {row: number, col: number},
                 // bottom-right position of block
-                "max_position": {row: number, col: number},
+                max_position: {row: number, col: number},
                 // list of positions covered by block
-                "range": [
+                range: [
                     {row: number, col: number},
                     ...
                 ]
             },
             ...
         ],
-        // Flat list of blocks covering each cell in the 5x4 board
-        "grid": [
+        // flat list of blocks covering each cell in the 5x4 board
+        grid: [
             "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two" | null,
             ...
         ],
         // list of available moves for each placed block
-        "next_moves": [
+        next_moves: [
             [
-                {"row_diff": number, "col_diff": number},
+                {row_diff: number, col_diff: number},
                 ...
             ]
             ...
@@ -337,21 +339,21 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 - Request Body: None
 - Response Body: The updated board
 
-    ```json
+    ```js
     {
-        "id": number,
+        id: number,
         // current state of the board
-        "state": "building" | "ready_to_solve" | "solving" | "solved",
+        state: "building" | "ready_to_solve" | "solving" | "solved",
         // list of placed blocks
-        "blocks": [
+        blocks: [
             {
-                "block": "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
+                block: "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two",
                 // top-left position of block
-                "min_position": {row: number, col: number},
+                min_position: {row: number, col: number},
                 // bottom-right position of block
-                "max_position": {row: number, col: number},
+                max_position: {row: number, col: number},
                 // list of positions covered by block
-                "range": [
+                range": [
                     {row: number, col: number},
                     ...
                 ]
@@ -359,14 +361,14 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
             ...
         ],
         // Flat list of blocks covering each cell in the 5x4 board
-        "grid": [
+        grid: [
             "one_by_one" | "one_by_two" | "two_by_one" | "two_by_two" | null,
             ...
         ],
         // list of available moves for each placed block
-        "next_moves": [
+        next_moves: [
             [
-                {"row_diff": number, "col_diff": number},
+                {row_diff: number, col_diff: number},
                 ...
             ]
             ...
