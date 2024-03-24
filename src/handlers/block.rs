@@ -38,8 +38,8 @@ pub async fn add(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to add block to board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
-    let body = json_extraction.ok_or(HandlerError::InvalidBody)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
+    let body = json_extraction.ok_or(HandlerError::Body)?.0;
 
     tracing::info!(
         "Attempting to add {:?} block to board with id {}",
@@ -84,8 +84,8 @@ pub async fn alter(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to alter block in board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
-    let body = json_extraction.ok_or(HandlerError::InvalidBody)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
+    let body = json_extraction.ok_or(HandlerError::Body)?.0;
 
     let board = match body {
         request::AlterBlock::ChangeBlock(data) => {
@@ -132,7 +132,9 @@ pub async fn alter(
     tag = "Block Operations",
     operation_id = "remove_block",
     path = "/board/{board_id}/block/{block_idx}",
-    params(request::BlockParams),
+    params(
+        ("value" = request::BlockParams, Query,)
+    ),
     responses(
         (status = OK, description = "Success", body = Board),
         (status = BAD_REQUEST, description = "Invalid parameters"),
@@ -148,7 +150,7 @@ pub async fn remove(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to remove block from board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
 
     tracing::info!(
         "Attempting to remove block at index {} from board with id {}",

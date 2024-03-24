@@ -93,12 +93,11 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
 
 - Path: `POST /api/board/`
 - Description: Creates a new empty board and will optionally randomly place blocks. *Note*: Randomly generated board may be unsolvable.
-- Request Body: The type of board to create
+- Query Params:
 
     ```js
-    {
-        type: "empty" | "random"
-    }
+    randomize: boolean | null // default: false
+
     ```
 
 - Response Body: The new board

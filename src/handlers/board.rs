@@ -1,6 +1,6 @@
 use axum::{
     debug_handler,
-    extract::{Json, Path},
+    extract::{Json, Path, Query},
     response::{IntoResponse, Response},
     Extension,
 };
@@ -21,7 +21,7 @@ use crate::services::{db::Pool as DbPool, randomizer, solver};
     tag = "Board Operations",
     operation_id = "create_board",
     path = "/board",
-    request_body(content = NewBoard),
+    params(request::RandomizeParams),
     responses(
         (status = OK, description = "Success", body = Board),
         (status = BAD_REQUEST, description = "Invalid parameters"),
@@ -33,17 +33,17 @@ use crate::services::{db::Pool as DbPool, randomizer, solver};
 #[debug_handler]
 pub async fn new(
     Extension(pool): Extension<DbPool>,
-    json_extraction: Option<Json<request::NewBoard>>,
+    query_extraction: Option<Query<request::RandomizeParams>>,
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to create a new board");
 
-    let body = json_extraction.ok_or(HandlerError::InvalidBody)?.0;
+    let params = query_extraction.ok_or(HandlerError::Query)?.0;
 
     let mut board = create_board(&pool)?;
 
     tracing::info!("Empty board {} successfully created", board);
 
-    if let request::NewBoard::Random = body {
+    if params.randomize.unwrap_or(false) {
         let randomized_board = update_board(board.id, randomizer::randomize, &pool)?;
 
         tracing::info!("Board {} successfully randomized", board.id);
@@ -77,8 +77,8 @@ pub async fn alter(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to alter board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
-    let body = json_extraction.ok_or(HandlerError::InvalidBody)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
+    let body = json_extraction.ok_or(HandlerError::Body)?.0;
 
     let board = match body {
         request::AlterBoard::ChangeState(data) => {
@@ -132,7 +132,7 @@ pub async fn solve(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to solve board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
     let board = get_board(params.board_id, &pool)?;
 
     let maybe_moves: Option<Vec<FlatBoardMove>>;
@@ -189,7 +189,7 @@ pub async fn delete(
 ) -> Result<Response, HttpError> {
     tracing::info!("Handling request to delete board");
 
-    let params = path_extraction.ok_or(HandlerError::InvalidPath)?.0;
+    let params = path_extraction.ok_or(HandlerError::Path)?.0;
 
     delete_board(params.board_id, &pool)?;
 

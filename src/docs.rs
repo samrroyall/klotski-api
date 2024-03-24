@@ -2,7 +2,7 @@ use utoipa::OpenApi;
 
 use crate::handlers;
 use crate::models::api::request::{
-    AddBlock, AlterBlock, AlterBoard, ChangeBlock, ChangeState, MoveBlock, NewBoard,
+    AddBlock, AlterBlock, AlterBoard, ChangeBlock, ChangeState, MoveBlock,
 };
 use crate::models::api::response::{Board, Solution, Solved};
 use crate::models::game::blocks::{Block, Positioned};
@@ -33,7 +33,6 @@ use crate::models::game::utils::Position;
         FlatBoardMove,
         FlatMove,
         MoveBlock,
-        NewBoard,
         Positioned,
         Position,
         Solution,

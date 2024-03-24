@@ -8,11 +8,10 @@ pub struct BoardParams {
     pub board_id: i32,
 }
 
-#[derive(Debug, Deserialize, ToSchema)]
-#[serde(tag = "type", rename_all = "snake_case")]
-pub enum NewBoard {
-    Empty,
-    Random,
+#[derive(Debug, Deserialize, IntoParams)]
+#[into_params(parameter_in = Query)]
+pub struct RandomizeParams {
+    pub randomize: Option<bool>,
 }
 
 #[derive(Debug, Deserialize, ToSchema)]
