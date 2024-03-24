@@ -386,7 +386,7 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
                 // bottom-right position of block
                 max_position: {row: number, col: number},
                 // list of positions covered by block
-                range": [
+                range: [
                     {row: number, col: number},
                     ...
                 ]
