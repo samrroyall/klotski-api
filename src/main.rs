@@ -27,7 +27,7 @@ async fn main() {
     let bind_url = dotenvy::var("BIND_URL").expect("BIND_URL is not set");
     let bind_port = dotenvy::var("BIND_PORT").expect("BIND_PORT is not set");
 
-    let _sentry_guard = sentry::init((
+    let _ = sentry::init((
         dsn,
         sentry::ClientOptions {
             environment: Some(environment.into()),
@@ -44,6 +44,9 @@ async fn main() {
     tracing::subscriber::set_global_default(subscriber).expect("Failed to set tracing subscriber");
 
     let db_pool = services::db::get_db_pool();
+
+    let mut conn = db_pool.get().unwrap();
+    services::db::run_migrations(&mut conn);
 
     let cors = CorsLayer::new()
         .allow_methods([Method::DELETE, Method::POST, Method::PUT])
@@ -77,7 +80,7 @@ async fn main() {
         .await
         .unwrap();
 
-    tracing::debug!("Listening on {bind_url}:{bind_port}");
+    tracing::info!("Listening on {bind_url}:{bind_port}");
 
     axum::serve(listener, app).await.unwrap();
 }
