@@ -1,0 +1,49 @@
+services:
+  server:
+    env_file:
+      - path: .env
+    build:
+      context: .
+      target: final
+    ports:
+      - ${BIND_PORT}:${BIND_PORT}
+    environment:
+      - ENVIRONMENT=${ENVIRONMENT}
+      - LOG_LEVEL=${LOG_LEVEL}
+      - BIND_URL=${BIND_URL}
+      - BIND_PORT=${BIND_PORT}
+      - PG_HOST=db
+      - PG_PORT=${PG_PORT}
+      - PG_DATABASE=${PG_DATABASE}
+      - PG_USERNAME=${PG_USERNAME}
+      - PG_PASSWORD=${PG_PASSWORD}
+      - SENTRY_DSN=${SENTRY_DSN}
+    depends_on:
+      db:
+        condition: service_healthy
+  db:
+    env_file:
+      - path: .env
+    image: postgres
+    restart: always
+    user: postgres
+    secrets:
+      - db-password
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_DB=${PG_DATABASE}
+      - POSTGRES_PASSWORD_FILE=/run/secrets/db-password
+    expose:
+      - ${PG_PORT}
+    healthcheck:
+      test: [ "CMD", "pg_isready" ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+volumes:
+  db-data:
+secrets:
+  db-password:
+    file: db-password.txt
+
