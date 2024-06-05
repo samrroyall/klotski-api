@@ -6,35 +6,23 @@ on:
       - main
 
 jobs:
-  build:
+  deploy:
+    name: Deploy app
     runs-on: ubuntu-latest
+    concurrency: deploy-group
     steps:
-      -
-        name: Checkout code
-        uses: actions/checkout@v4
-      -
-        name: Login to DockerHub
-        uses: docker/login-action@v3
-        with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-      -
-        name: Build and push Docker image
-        uses: docker/build-push-action@v5
+      - uses: actions/checkout@v4
+      - uses: superfly/flyctl-actions/setup-flyctl@master
+      - run: flyctl deploy --remote-only --config ./compose.yaml
         env:
           ENVIRONMENT: $${{ vars.ENVIRONMENT }}
           LOG_LEVEL: ${{ vars.LOG_LEVEL }}
           BIND_URL: ${{ vars.BIND_URL }}
           BIND_PORT: ${{ vars.BIND_PORT }}
+          ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
           PG_PORT: ${{ vars.PG_PORT }}
           PG_DATABASE: ${{ secrets.PG_DATABASE }}
           PG_USERNAME: ${{ secrets.PG_USERNAME }}
           PG_PASSWORD: ${{ secrets.PG_PASSWORD }}
           SENTRY_DSN: ${{ secrets.SENTRY_DSN }}
-        with:
-          context: .
-          push: true
-          tags: ${{ secrets.DOCKER_USERNAME }}/${{ github.event.repository.name }}:latest
+          FLY_API_TOKEN: ${{ secrets.FLY_API_TOKEN }}
