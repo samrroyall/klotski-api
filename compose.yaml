@@ -12,6 +12,7 @@ services:
       - LOG_LEVEL=${LOG_LEVEL}
       - BIND_URL=${BIND_URL}
       - BIND_PORT=${BIND_PORT}
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS}
       - PG_HOST=db
       - PG_PORT=${PG_PORT}
       - PG_DATABASE=${PG_DATABASE}

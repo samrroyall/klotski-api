@@ -1,7 +1,7 @@
 #![warn(clippy::pedantic)]
 
 use axum::{
-    http::Method,
+    http::{HeaderValue, Method},
     routing::{delete, post, put},
     Extension, Router,
 };
@@ -23,9 +23,10 @@ async fn main() {
 
     let environment = dotenvy::var("ENVIRONMENT").expect("ENVIRONMENT is not set");
     let log_level = dotenvy::var("LOG_LEVEL").expect("LOG_LEVEL is not set");
-    let dsn = dotenvy::var("SENTRY_DSN").expect("SENTRY_DSN is not set");
     let bind_url = dotenvy::var("BIND_URL").expect("BIND_URL is not set");
     let bind_port = dotenvy::var("BIND_PORT").expect("BIND_PORT is not set");
+    let allowed_origins = dotenvy::var("ALLOWED_ORIGINS").expect("ALLOWED_ORIGINS is not set");
+    let dsn = dotenvy::var("SENTRY_DSN").expect("SENTRY_DSN is not set");
 
     let _ = sentry::init((
         dsn,
@@ -48,10 +49,15 @@ async fn main() {
     let mut conn = db_pool.get().unwrap();
     services::db::run_migrations(&mut conn);
 
+    let origins: Vec<HeaderValue> = allowed_origins
+        .split(',')
+        .map(|origin| origin.parse().unwrap())
+        .collect();
+
     let cors = CorsLayer::new()
         .allow_methods([Method::DELETE, Method::POST, Method::PUT])
         .allow_headers(Any)
-        .allow_origin(Any);
+        .allow_origin(origins);
 
     let block_routes = Router::new()
         .route("/", post(handlers::block::add))
