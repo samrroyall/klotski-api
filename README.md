@@ -1,6 +1,6 @@
 # klotski-api
 
-This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is built using the Axum framework and uses Diesel to communicate with a Postgres database.
+This API supports the [Klotski UI](https://github.com/samrroyall/klotski). It is built using the Axum framework and uses Diesel to communicate with a Postgres database.
 
 ## Project Structure
 
@@ -409,3 +409,18 @@ This API supports [Klotski UI](https://github.com/samrroyall/klotski). It is bui
     }
     ```
 
+## Usage
+
+### Prerequisites
+
+Before you can run the application locally, ensure you have 
+[Docker Desktop](https://www.docker.com/products/docker-desktop/) installed.
+
+### Environment Variables
+
+Next, copy the `.env.template` file to `.env` and update the values.
+
+### Run the application
+
+Run `docker-compose up --build` and the API will be available at 
+`http://localhost:<BIND_PORT>`.

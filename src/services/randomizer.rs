@@ -26,7 +26,7 @@ fn get_cells_free(board: &Board) -> Vec<u8> {
         .collect::<Vec<u8>>()
 }
 
-fn get_random_free_cell(free_cells: &Vec<u8>, rng: &mut ThreadRng) -> Option<Position> {
+fn get_random_free_cell(free_cells: &[u8], rng: &mut ThreadRng) -> Option<Position> {
     let free_cell = free_cells[get_random(0, free_cells.len() - 1, rng)];
 
     let min_row = free_cell / Board::COLS;
