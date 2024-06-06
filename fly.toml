@@ -8,7 +8,6 @@ primary_region = 'ord'
 
 [build]
 
-<<<<<<< HEAD
 [env]
   ALLOWED_ORIGINS = 'https://klotski.samroyall.com'
   BIND_PORT = '8080'
@@ -17,8 +16,6 @@ primary_region = 'ord'
   LOG_LEVEL = 'warn'
   PG_PORT = '5432'
 
-=======
->>>>>>> main
 [http_service]
   internal_port = 8080
   force_https = true
