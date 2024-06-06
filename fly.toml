@@ -11,7 +11,7 @@ primary_region = 'ord'
 [env]
   ALLOWED_ORIGINS = 'https://klotski.samroyall.com'
   BIND_PORT = '8080'
-  BIND_URL = '127.0.0.1'
+  BIND_URL = '0.0.0.0'
   ENVIRONMENT = 'production'
   LOG_LEVEL = 'info'
   PG_PORT = '5432'
