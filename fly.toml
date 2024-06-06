@@ -1,4 +1,4 @@
-# fly.toml app configuration file generated for klotski-api on 2024-06-05T15:04:47-05:00
+# fly.toml app configuration file generated for klotski-api on 2024-06-05T19:15:53-05:00
 #
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
 #
@@ -7,6 +7,14 @@ app = 'klotski-api'
 primary_region = 'ord'
 
 [build]
+
+[env]
+  ALLOWED_ORIGINS = 'https://klotski.samroyall.com'
+  BIND_PORT = '8080'
+  BIND_URL = '0.0.0.0'
+  ENVIRONMENT = 'production'
+  LOG_LEVEL = 'warn'
+  PG_PORT = '5432'
 
 [http_service]
   internal_port = 8080
